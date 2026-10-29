@@ -33,7 +33,8 @@ import {
   Zap,
   Power,
   Smartphone,
-  Code2
+  Code2,
+  Calendar
 } from 'lucide-react';
 
 import { Source, Category, Channel, SyncLog } from './types';
@@ -46,13 +47,15 @@ import { VercelDeployGuide } from './components/VercelDeployGuide';
 import { AndroidApiPlayground } from './components/AndroidApiPlayground';
 import { AndroidCodeExplorer } from './components/AndroidCodeExplorer';
 import { EndToEndTestRunner } from './components/EndToEndTestRunner';
+import { VodManager } from './components/VodManager';
+import { EpgGuideView } from './components/EpgGuideView';
 import { getSavedSupabaseConfig, saveSupabaseConfig, getSupabaseClient } from './lib/supabase';
 import { testUrlSSRF } from './lib/edgeTester';
 import { SQL_TABLES } from './data/schemaData';
 
 export default function App() {
   const [lang, setLang] = useState<'fr' | 'ar'>('fr');
-  const [activeSection, setActiveSection] = useState<'sources' | 'channels' | 'categories' | 'logs' | 'android_api' | 'android_code' | 'e2e_tests' | 'ssrf_lab' | 'database' | 'vercel'>('e2e_tests');
+  const [activeSection, setActiveSection] = useState<'sources' | 'channels' | 'vod' | 'epg' | 'categories' | 'logs' | 'android_api' | 'android_code' | 'e2e_tests' | 'ssrf_lab' | 'database' | 'vercel'>('sources');
 
   // Core Data State
   const [sources, setSources] = useState<Source[]>([]);
@@ -162,6 +165,20 @@ export default function App() {
 
   const handlePlayChannel = (channel: Channel) => {
     setPlayingChannel(channel);
+    setIsPlayerOpen(true);
+  };
+
+  const handlePlayStream = (title: string, streamUrl: string) => {
+    setPlayingChannel({
+      id: `preview-${Date.now()}`,
+      source_id: 'src-2',
+      name: title,
+      stream_url: streamUrl,
+      stream_type: 'vod',
+      is_active: true,
+      sort_order: 1,
+      created_at: new Date().toISOString(),
+    });
     setIsPlayerOpen(true);
   };
 
@@ -283,6 +300,40 @@ export default function App() {
                 activeSection === 'channels' ? 'bg-white/20 text-white' : 'bg-slate-800 text-slate-400'
               }`}>
                 {channels.length}
+              </span>
+            </button>
+
+            <button
+              onClick={() => setActiveSection('vod')}
+              className={`w-full flex items-center justify-between p-3 rounded-xl text-xs font-semibold transition-all shrink-0 ${
+                activeSection === 'vod'
+                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
+                  : 'bg-slate-900 text-slate-300 hover:bg-slate-850 hover:text-white border border-slate-800/80'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Film className="w-4 h-4 text-pink-400" />
+                <span>{lang === 'fr' ? 'Films & Séries (VOD)' : 'الأفلام والمسلسلات VOD'}</span>
+              </div>
+              <span className="px-1.5 py-0.5 rounded text-[10px] bg-pink-500/20 text-pink-300 font-mono">
+                VOD
+              </span>
+            </button>
+
+            <button
+              onClick={() => setActiveSection('epg')}
+              className={`w-full flex items-center justify-between p-3 rounded-xl text-xs font-semibold transition-all shrink-0 ${
+                activeSection === 'epg'
+                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
+                  : 'bg-slate-900 text-slate-300 hover:bg-slate-850 hover:text-white border border-slate-800/80'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Calendar className="w-4 h-4 text-sky-400" />
+                <span>{lang === 'fr' ? 'Guide TV (EPG)' : 'دليل البرامج EPG'}</span>
+              </div>
+              <span className="px-1.5 py-0.5 rounded text-[10px] bg-sky-500/20 text-sky-300 font-mono">
+                EPG
               </span>
             </button>
 
@@ -711,6 +762,23 @@ export default function App() {
                 ))}
               </div>
             </div>
+          )}
+
+          {/* SECTION: VOD (FILMS & SERIES) */}
+          {activeSection === 'vod' && (
+            <VodManager
+              lang={lang}
+              onPlayStream={handlePlayStream}
+            />
+          )}
+
+          {/* SECTION: EPG GUIDE */}
+          {activeSection === 'epg' && (
+            <EpgGuideView
+              lang={lang}
+              channels={channels}
+              onPlayChannel={handlePlayChannel}
+            />
           )}
 
           {/* SECTION 3: CATEGORIES MANAGER */}

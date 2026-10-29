@@ -3,7 +3,7 @@
  * Chemin: /src/services/sourceService.ts
  */
 import { getSupabaseClient, getSavedSupabaseConfig } from '../lib/supabase';
-import { Source, Category, Channel, SyncLog, SourceType } from '../types';
+import { Source, Category, Channel, SyncLog, SourceType, Movie, Series, EPGProgram } from '../types';
 import { testUrlSSRF } from '../lib/edgeTester';
 
 // Données initiales locales de démonstration (pour test immédiat sans configuration Supabase préalable)
@@ -234,6 +234,167 @@ let localSyncLogs: SyncLog[] = [
     duration_ms: 540,
     triggered_by: 'admin@besharetv.com',
     created_at: new Date(Date.now() - 86400000).toISOString(),
+  },
+];
+
+let localMovies: Movie[] = [
+  {
+    id: 'mov-1',
+    source_id: 'src-2',
+    category_id: 'cat-4',
+    title: 'Inception',
+    title_ar: 'استهلال',
+    stream_url: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
+    poster_url: 'https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=300&auto=format&fit=crop&q=80',
+    rating: 8.8,
+    release_year: 2010,
+    duration_mins: 148,
+    synopsis: 'Un voleur qui s’infiltre dans les rêves pour voler des secrets se voit offrir une chance de retrouver sa vie passée en réalisant une inception.',
+    is_active: true,
+    created_at: new Date().toISOString(),
+  },
+  {
+    id: 'mov-2',
+    source_id: 'src-2',
+    category_id: 'cat-4',
+    title: 'Interstellar',
+    title_ar: 'بين النجوم',
+    stream_url: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
+    poster_url: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=300&auto=format&fit=crop&q=80',
+    rating: 8.7,
+    release_year: 2014,
+    duration_mins: 169,
+    synopsis: 'Une équipe d’explorateurs voyage à travers un trou de ver dans l’espace pour assurer la survie de l’humanité.',
+    is_active: true,
+    created_at: new Date().toISOString(),
+  },
+  {
+    id: 'mov-3',
+    source_id: 'src-2',
+    category_id: 'cat-4',
+    title: 'Gladiator II',
+    title_ar: 'المصارع 2',
+    stream_url: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
+    poster_url: 'https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=300&auto=format&fit=crop&q=80',
+    rating: 7.9,
+    release_year: 2024,
+    duration_mins: 150,
+    synopsis: 'Des années après la mort de Maximus, Lucius entre dans le Colisée pour lutter contre la tyrannie des empereurs romains.',
+    is_active: true,
+    created_at: new Date().toISOString(),
+  },
+  {
+    id: 'mov-4',
+    source_id: 'src-2',
+    category_id: 'cat-4',
+    title: 'Dune: Deuxième Partie',
+    title_ar: 'كثيب: الجزء الثاني',
+    stream_url: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
+    poster_url: 'https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?w=300&auto=format&fit=crop&q=80',
+    rating: 8.6,
+    release_year: 2024,
+    duration_mins: 166,
+    synopsis: 'Paul Atréides s’unit à Chani et aux Fremen pour mener la révolte contre les conspirateurs qui ont détruit sa famille.',
+    is_active: true,
+    created_at: new Date().toISOString(),
+  },
+];
+
+let localSeries: Series[] = [
+  {
+    id: 'ser-1',
+    source_id: 'src-2',
+    category_id: 'cat-5',
+    title: 'Le Bureau des Légendes',
+    title_ar: 'مكتب الأساطير',
+    poster_url: 'https://images.unsplash.com/photo-1485846234645-a62644f84728?w=300&auto=format&fit=crop&q=80',
+    rating: 8.7,
+    release_year: 2015,
+    plot: 'Au sein de la DGSE, un département forme et pilote à distance les agents les plus précieux des services de renseignement français.',
+    seasons_count: 5,
+    is_active: true,
+    created_at: new Date().toISOString(),
+  },
+  {
+    id: 'ser-2',
+    source_id: 'src-2',
+    category_id: 'cat-5',
+    title: 'Breaking Bad',
+    title_ar: 'اختلال ضال',
+    poster_url: 'https://images.unsplash.com/photo-1563089145-599997674d42?w=300&auto=format&fit=crop&q=80',
+    rating: 9.5,
+    release_year: 2008,
+    plot: 'Un professeur de chimie atteint d’un cancer en phase terminale s’associe à un ancien élève pour fabriquer de la méthamphétamine.',
+    seasons_count: 5,
+    is_active: true,
+    created_at: new Date().toISOString(),
+  },
+  {
+    id: 'ser-3',
+    source_id: 'src-2',
+    category_id: 'cat-5',
+    title: 'Omar Al-Farooq',
+    title_ar: 'عمر بن الخطاب',
+    poster_url: 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=300&auto=format&fit=crop&q=80',
+    rating: 9.2,
+    release_year: 2012,
+    plot: 'Fresque historique majeure retraçant la vie et la gouvernance du deuxième calife Omar Ibn Al-Khattâb.',
+    seasons_count: 1,
+    is_active: true,
+    created_at: new Date().toISOString(),
+  },
+];
+
+let localEpgPrograms: EPGProgram[] = [
+  {
+    id: 'epg-1',
+    channel_id: 'ch-1',
+    epg_channel_id: 'TF1.fr',
+    title: 'Le Journal de 20 Heures',
+    description: 'Le tour d’horizon complet de l’actualité nationale et internationale présenté par la rédaction de TF1.',
+    start_time: new Date(Date.now() - 1800000).toISOString(),
+    end_time: new Date(Date.now() + 1800000).toISOString(),
+    category: 'Information',
+  },
+  {
+    id: 'epg-2',
+    channel_id: 'ch-1',
+    epg_channel_id: 'TF1.fr',
+    title: 'Film Cinéma Prime Time',
+    description: 'Grande soirée grand écran en ultra haute définition.',
+    start_time: new Date(Date.now() + 1800000).toISOString(),
+    end_time: new Date(Date.now() + 7200000).toISOString(),
+    category: 'Cinéma',
+  },
+  {
+    id: 'epg-3',
+    channel_id: 'ch-3',
+    epg_channel_id: 'beIN1.fr',
+    title: 'UEFA Champions League Live',
+    description: 'Avant-match, analyse tactique et direct du choc européen.',
+    start_time: new Date(Date.now() - 900000).toISOString(),
+    end_time: new Date(Date.now() + 6300000).toISOString(),
+    category: 'Sport',
+  },
+  {
+    id: 'epg-4',
+    channel_id: 'ch-4',
+    epg_channel_id: 'AlJazeera.qa',
+    title: 'حصاد اليوم الإخباري',
+    description: 'متابعة حية ومفصلة لآخر التطورات السياسية والاقتصادية في العالم العربي والدولي.',
+    start_time: new Date(Date.now() - 2400000).toISOString(),
+    end_time: new Date(Date.now() + 1200000).toISOString(),
+    category: 'أخبار',
+  },
+  {
+    id: 'epg-5',
+    channel_id: 'ch-2',
+    epg_channel_id: 'France2.fr',
+    title: 'Envoyé Spécial',
+    description: 'Grands reportages d’investigation, enquêtes exclusives et témoignages inédits.',
+    start_time: new Date(Date.now() - 1200000).toISOString(),
+    end_time: new Date(Date.now() + 4800000).toISOString(),
+    category: 'Magazine',
   },
 ];
 
@@ -557,5 +718,76 @@ export const SourceService = {
       }
     }
     return [...localSyncLogs];
+  },
+
+  /**
+   * Récupère les films VOD
+   */
+  async getMovies(): Promise<Movie[]> {
+    const client = getSupabaseClient();
+    if (client) {
+      try {
+        const { data, error } = await client.from('movies').select('*').order('created_at', { ascending: false });
+        if (!error && data && data.length > 0) return data;
+      } catch (err) {
+        console.warn(err);
+      }
+    }
+    return [...localMovies];
+  },
+
+  /**
+   * Bascule le statut d'un film
+   */
+  async toggleMovieActive(id: string, current: boolean): Promise<boolean> {
+    localMovies = localMovies.map((m) => (m.id === id ? { ...m, is_active: !current } : m));
+    return true;
+  },
+
+  /**
+   * Récupère les séries TV
+   */
+  async getSeries(): Promise<Series[]> {
+    const client = getSupabaseClient();
+    if (client) {
+      try {
+        const { data, error } = await client.from('series').select('*').order('created_at', { ascending: false });
+        if (!error && data && data.length > 0) return data;
+      } catch (err) {
+        console.warn(err);
+      }
+    }
+    return [...localSeries];
+  },
+
+  /**
+   * Bascule le statut d'une série
+   */
+  async toggleSeriesActive(id: string, current: boolean): Promise<boolean> {
+    localSeries = localSeries.map((s) => (s.id === id ? { ...s, is_active: !current } : s));
+    return true;
+  },
+
+  /**
+   * Récupère les programmes EPG
+   */
+  async getEpgPrograms(channelId?: string): Promise<EPGProgram[]> {
+    const client = getSupabaseClient();
+    if (client) {
+      try {
+        let query = client.from('epg_programs').select('*').order('start_time', { ascending: true });
+        if (channelId) {
+          query = query.eq('channel_id', channelId);
+        }
+        const { data, error } = await query;
+        if (!error && data && data.length > 0) return data;
+      } catch (err) {
+        console.warn(err);
+      }
+    }
+    if (channelId) {
+      return localEpgPrograms.filter((p) => p.channel_id === channelId);
+    }
+    return [...localEpgPrograms];
   },
 };
