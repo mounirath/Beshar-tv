@@ -31,6 +31,7 @@ export const AndroidCodeExplorer: React.FC<AndroidCodeExplorerProps> = ({ lang }
     { id: 'models', name: 'Models.kt', title: 'Modèles de données (Live, VOD, EPG)', path: '/android/app/src/main/java/com/beshare/tv/data/model/Models.kt' },
     { id: 'manifest', name: 'AndroidManifest.xml', title: 'Manifest TV Leanback & Mobile', path: '/android/app/src/main/AndroidManifest.xml' },
     { id: 'gradle', name: 'build.gradle.kts', title: 'Configuration Gradle & Dépendances', path: '/android/app/build.gradle.kts' },
+    { id: 'gradle_properties', name: 'gradle.properties', title: 'Propriétés AndroidX & JVM CI', path: '/android/gradle.properties' },
   ];
 
   const currentFileObj = files.find((f) => f.id === selectedFile) || files[0];
@@ -312,6 +313,21 @@ dependencies {
     implementation("androidx.media3:media3-ui:1.5.0")
     implementation("com.squareup.retrofit2:retrofit:2.11.0")
 }`}</pre>
+          )}
+
+          {selectedFile === 'gradle_properties' && (
+            <pre>{`# android/gradle.properties — Indispensable pour Gradle & CI GitHub Actions
+org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+org.gradle.parallel=true
+org.gradle.caching=true
+
+# Active AndroidX (requis pour Media3, Jetpack Compose, Leanback TV)
+android.useAndroidX=true
+android.enableJetifier=false
+
+# Optimisation des builds modulaires
+android.nonTransitiveRClass=true
+kotlin.code.style=official`}</pre>
           )}
         </div>
       </div>
