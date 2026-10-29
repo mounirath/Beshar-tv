@@ -32,7 +32,8 @@ import {
   Clock,
   Zap,
   Power,
-  Smartphone
+  Smartphone,
+  Code2
 } from 'lucide-react';
 
 import { Source, Category, Channel, SyncLog } from './types';
@@ -43,13 +44,14 @@ import { CategoryManager } from './components/CategoryManager';
 import { SyncLogsView } from './components/SyncLogsView';
 import { VercelDeployGuide } from './components/VercelDeployGuide';
 import { AndroidApiPlayground } from './components/AndroidApiPlayground';
+import { AndroidCodeExplorer } from './components/AndroidCodeExplorer';
 import { getSavedSupabaseConfig, saveSupabaseConfig, getSupabaseClient } from './lib/supabase';
 import { testUrlSSRF } from './lib/edgeTester';
 import { SQL_TABLES } from './data/schemaData';
 
 export default function App() {
   const [lang, setLang] = useState<'fr' | 'ar'>('fr');
-  const [activeSection, setActiveSection] = useState<'sources' | 'channels' | 'categories' | 'logs' | 'android_api' | 'ssrf_lab' | 'database' | 'vercel'>('android_api');
+  const [activeSection, setActiveSection] = useState<'sources' | 'channels' | 'categories' | 'logs' | 'android_api' | 'android_code' | 'ssrf_lab' | 'database' | 'vercel'>('android_code');
 
   // Core Data State
   const [sources, setSources] = useState<Source[]>([]);
@@ -367,6 +369,23 @@ export default function App() {
               </div>
               <span className="px-1.5 py-0.5 rounded text-[10px] bg-emerald-500/20 text-emerald-300 font-mono">
                 API
+              </span>
+            </button>
+
+            <button
+              onClick={() => setActiveSection('android_code')}
+              className={`w-full flex items-center justify-between p-3 rounded-xl text-xs font-semibold transition-all shrink-0 ${
+                activeSection === 'android_code'
+                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
+                  : 'bg-slate-900 text-slate-300 hover:bg-slate-850 hover:text-white border border-slate-800/80'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Code2 className="w-4 h-4 text-purple-400" />
+                <span>{lang === 'fr' ? 'App Android Kotlin (Étape 5)' : 'كود أندرويد (المرحلة 5)'}</span>
+              </div>
+              <span className="px-1.5 py-0.5 rounded text-[10px] bg-purple-500/20 text-purple-300 font-mono">
+                KOTLIN
               </span>
             </button>
 
@@ -769,6 +788,11 @@ export default function App() {
           {/* SECTION: ANDROID API GATEWAY (ÉTAPE 4) */}
           {activeSection === 'android_api' && (
             <AndroidApiPlayground lang={lang} />
+          )}
+
+          {/* SECTION: ANDROID KOTLIN CODE EXPLORER (ÉTAPE 5) */}
+          {activeSection === 'android_code' && (
+            <AndroidCodeExplorer lang={lang} />
           )}
 
           {/* SECTION 7: VERCEL DEPLOYMENT */}

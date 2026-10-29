@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">BeShare TV</string>
+    <string name="live_tv">Télévision en Direct</string>
+    <string name="vod_movies">Films VOD</string>
+    <string name="vod_series">Séries TV</string>
+    <string name="epg_guide">Guide des Programmes (EPG)</string>
+    <string name="favorites">Mes Favoris</string>
+    <string name="search_hint">Rechercher une chaîne ou un film...</string>
+    <string name="now_playing">En cours de diffusion</string>
+    <string name="next_program">À suivre</string>
+    <string name="loading_catalog">Actualisation du catalogue BeShare TV...</string>
+    <string name="no_channels_found">Aucune chaîne disponible dans cette catégorie.</string>
+    <string name="error_network">Erreur réseau : vérifiez votre connexion Internet.</string>
+    <string name="error_screen_limit">Limite d\'écrans atteinte sur votre abonnement.</string>
+    <string name="error_subscription_expired">Votre abonnement a expiré. Veuillez contacter le support.</string>
+    <string name="retry">Réessayer</string>
+    <string name="audio_tracks">Pistes Audio</string>
+    <string name="subtitles">Sous-titres</string>
+</resources>

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">BeShare TV</string>
+    <string name="live_tv">البث التلفزيوني المباشر</string>
+    <string name="vod_movies">أفلام الفيديو حسب الطلب</string>
+    <string name="vod_series">المسلسلات التلفزيونية</string>
+    <string name="epg_guide">دليل البرامج التلفزيونية (EPG)</string>
+    <string name="favorites">قنواتي المفضلة</string>
+    <string name="search_hint">البحث عن قناة أو فيلم...</string>
+    <string name="now_playing">يعرض الآن</string>
+    <string name="next_program">البرنامج التالي</string>
+    <string name="loading_catalog">جارٍ تحديث كتالوج القنوات...</string>
+    <string name="no_channels_found">لا توجد قنوات متاحة في هذا التصنيف.</string>
+    <string name="error_network">خطأ في الاتصال: يرجى التحقق من اتصال الإنترنت.</string>
+    <string name="error_screen_limit">تم الوصول إلى الحد الأقصى للشاشات المسموح بها في اشتراكك.</string>
+    <string name="error_subscription_expired">انتهت صلاحية اشتراكك. يرجى تجديد الاشتراك.</string>
+    <string name="retry">إعادة المحاولة</string>
+    <string name="audio_tracks">المسارات الصوتية</string>
+    <string name="subtitles">الترجمة</string>
+</resources>
