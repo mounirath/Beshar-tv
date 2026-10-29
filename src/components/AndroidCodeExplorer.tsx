@@ -26,6 +26,7 @@ export const AndroidCodeExplorer: React.FC<AndroidCodeExplorerProps> = ({ lang }
     { id: 'epg', name: 'EpgScreen.kt', title: 'Guide TV Électronique & Direct', path: '/android/app/src/main/java/com/beshare/tv/ui/screens/EpgScreen.kt' },
     { id: 'search', name: 'SearchScreen.kt', title: 'Recherche Globale Live/VOD', path: '/android/app/src/main/java/com/beshare/tv/ui/screens/SearchScreen.kt' },
     { id: 'settings', name: 'SettingsScreen.kt', title: 'Paramètres & Buffer ExoPlayer', path: '/android/app/src/main/java/com/beshare/tv/ui/screens/SettingsScreen.kt' },
+    { id: 'api_client', name: 'ApiClient.kt', title: 'Client Retrofit & Mode Démo Dynamique', path: '/android/app/src/main/java/com/beshare/tv/data/api/ApiClient.kt' },
     { id: 'viewmodel', name: 'MainViewModel.kt', title: 'Architecture MVVM & Quotas', path: '/android/app/src/main/java/com/beshare/tv/ui/viewmodel/MainViewModel.kt' },
     { id: 'api_service', name: 'BeShareApiService.kt', title: 'Interface Retrofit Coroutines', path: '/android/app/src/main/java/com/beshare/tv/data/api/BeShareApiService.kt' },
     { id: 'models', name: 'Models.kt', title: 'Modèles de données (Live, VOD, EPG)', path: '/android/app/src/main/java/com/beshare/tv/data/model/Models.kt' },
@@ -238,6 +239,33 @@ fun SettingsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
         modes = listOf("Standard (15s)", "Faible Latence (5s)", "Réseau Instable (30s)"),
         onSelect = { mode -> updateExoPlayerBuffer(mode) }
     )
+}`}</pre>
+          )}
+
+          {selectedFile === 'api_client' && (
+            <pre>{`// ApiClient.kt — Gestion dynamique de l'URL Supabase et Mode Démo
+object ApiClient {
+    private var apiService: BeShareApiService? = null
+    
+    // Récupère l'URL personnalisée (SharedPreferences) ou le BuildConfig par défaut
+    fun getBaseUrl(context: Context): String {
+        val prefs = context.getSharedPreferences("beshare_device_prefs", Context.MODE_PRIVATE)
+        val custom = prefs.getString("custom_client_api_url", null)
+        return custom ?: BuildConfig.CLIENT_API_URL
+    }
+
+    // Permet à l'utilisateur de configurer son propre projet Supabase sans recompiler
+    fun updateServerConfig(context: Context, newUrl: String?, anonKey: String?) {
+        val prefs = context.getSharedPreferences("beshare_device_prefs", Context.MODE_PRIVATE)
+        prefs.edit().putString("custom_client_api_url", newUrl).apply()
+        apiService = null // Force la recréation du client Retrofit
+    }
+
+    // Mode Démonstration avec flux HLS et vidéos test
+    fun isDemoMode(context: Context): Boolean {
+        return context.getSharedPreferences("beshare_device_prefs", Context.MODE_PRIVATE)
+            .getBoolean("demo_mode_enabled", false)
+    }
 }`}</pre>
           )}
 

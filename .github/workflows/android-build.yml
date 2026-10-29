@@ -37,6 +37,10 @@ jobs:
 
       - name: Build Debug APK
         working-directory: ./android
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          CLIENT_API_URL: ${{ secrets.CLIENT_API_URL }}
         run: |
           if [ -f "./gradlew" ]; then
             ./gradlew assembleDebug --stacktrace

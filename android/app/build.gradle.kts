@@ -22,9 +22,19 @@ android {
 
         // Configuration Supabase pour l'application Android (Clé Publique Anon + URL Backend)
         // Les clés de service ou mots de passe admin ne sont JAMAIS injectés ici.
-        buildConfigField("String", "SUPABASE_URL", "\"https://YOUR_PROJECT_ID.supabase.co\"")
-        buildConfigField("String", "SUPABASE_ANON_KEY", "\"YOUR_SUPABASE_ANON_KEY\"")
-        buildConfigField("String", "CLIENT_API_URL", "\"https://YOUR_PROJECT_ID.supabase.co/functions/v1/client-api\"")
+        val resolvedSupabaseUrl = (project.findProperty("SUPABASE_URL") as? String)
+            ?: System.getenv("SUPABASE_URL")?.takeIf { it.isNotBlank() }
+            ?: "https://YOUR_PROJECT_ID.supabase.co"
+        val resolvedSupabaseAnonKey = (project.findProperty("SUPABASE_ANON_KEY") as? String)
+            ?: System.getenv("SUPABASE_ANON_KEY")?.takeIf { it.isNotBlank() }
+            ?: "YOUR_SUPABASE_ANON_KEY"
+        val resolvedClientApiUrl = (project.findProperty("CLIENT_API_URL") as? String)
+            ?: System.getenv("CLIENT_API_URL")?.takeIf { it.isNotBlank() }
+            ?: "${resolvedSupabaseUrl.trimEnd('/')}/functions/v1/client-api"
+
+        buildConfigField("String", "SUPABASE_URL", "\"$resolvedSupabaseUrl\"")
+        buildConfigField("String", "SUPABASE_ANON_KEY", "\"$resolvedSupabaseAnonKey\"")
+        buildConfigField("String", "CLIENT_API_URL", "\"$resolvedClientApiUrl\"")
     }
 
     buildTypes {

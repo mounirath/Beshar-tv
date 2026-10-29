@@ -24,6 +24,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _uiState = MutableStateFlow<CatalogUiState>(CatalogUiState.Loading)
     val uiState: StateFlow<CatalogUiState> = _uiState.asStateFlow()
 
+    private val _isDemoMode = MutableStateFlow(com.beshare.tv.data.api.ApiClient.isDemoMode(application))
+    val isDemoMode: StateFlow<Boolean> = _isDemoMode.asStateFlow()
+
     private val _activeTab = MutableStateFlow("live") // "live", "movies", "series", "favorites"
     val activeTab: StateFlow<String> = _activeTab.asStateFlow()
 
@@ -49,6 +52,28 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val currentEpg: StateFlow<Map<String, EpgProgram>> = _currentEpg.asStateFlow()
 
     init {
+        bootstrapAndAuthenticate()
+    }
+
+    fun enableDemoMode() {
+        val app = getApplication<Application>()
+        com.beshare.tv.data.api.ApiClient.setDemoMode(app, true)
+        _isDemoMode.value = true
+        bootstrapAndAuthenticate()
+    }
+
+    fun disableDemoMode() {
+        val app = getApplication<Application>()
+        com.beshare.tv.data.api.ApiClient.setDemoMode(app, false)
+        _isDemoMode.value = false
+        bootstrapAndAuthenticate()
+    }
+
+    fun saveServerConfig(url: String?, anonKey: String?) {
+        val app = getApplication<Application>()
+        com.beshare.tv.data.api.ApiClient.updateServerConfig(app, url, anonKey)
+        com.beshare.tv.data.api.ApiClient.setDemoMode(app, false)
+        _isDemoMode.value = false
         bootstrapAndAuthenticate()
     }
 

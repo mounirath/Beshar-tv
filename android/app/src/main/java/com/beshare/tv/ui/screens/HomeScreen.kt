@@ -56,9 +56,25 @@ fun HomeScreen(viewModel: MainViewModel) {
     val movies by viewModel.movies.collectAsState()
     val series by viewModel.series.collectAsState()
 
+    val isDemoMode by viewModel.isDemoMode.collectAsState()
+    var showServerDialog by remember { mutableStateOf(false) }
+
     // Navigation d'écran interne : "catalog", "search", "epg", "settings", "series_detail"
     var currentScreen by remember { mutableStateOf("catalog") }
     var selectedSeriesForDetail by remember { mutableStateOf<Series?>(null) }
+
+    if (showServerDialog) {
+        ServerConfigDialog(
+            currentUrl = com.beshare.tv.data.api.ApiClient.getBaseUrl(context),
+            currentAnonKey = com.beshare.tv.data.api.ApiClient.getAnonKey(context),
+            onDismiss = { showServerDialog = false },
+            onSave = { newUrl, newKey ->
+                viewModel.saveServerConfig(newUrl, newKey)
+                showServerDialog = false
+                Toast.makeText(context, "Configuration serveur enregistrée !", Toast.LENGTH_SHORT).show()
+            }
+        )
+    }
 
     when (currentScreen) {
         "search" -> {
@@ -105,66 +121,113 @@ fun HomeScreen(viewModel: MainViewModel) {
             .background(Slate950)
             .padding(16.dp)
     ) {
-        // En-tête / Barre de Navigation Supérieure (Compatible Télécommande D-pad)
-        Row(
+        // En-tête / Barre de Navigation Supérieure (Compatible Télécommande D-pad et Mobile)
+        Column(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Icon(
-                    imageVector = Icons.Default.Tv,
-                    contentDescription = null,
-                    tint = Indigo400,
-                    modifier = Modifier.size(28.dp)
-                )
-                Text(
-                    text = "BeShare TV",
-                    color = Color.White,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold
-                )
+            // Ligne 1 : Titre + Badge Démo + Actions (Recherche, EPG, Paramètres)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Icon(
+                        imageVector = Icons.Default.Tv,
+                        contentDescription = null,
+                        tint = Indigo400,
+                        modifier = Modifier.size(28.dp)
+                    )
+                    Text(
+                        text = "BeShare TV",
+                        color = Color.White,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    if (isDemoMode) {
+                        Surface(
+                            color = Amber400.copy(alpha = 0.2f),
+                            shape = RoundedCornerShape(6.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Amber400)
+                        ) {
+                            Text(
+                                text = "DÉMO",
+                                color = Amber400,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+                }
+
+                // Boutons d'Action toujours visibles (Recherche, Guide EPG, Paramètres)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    ActionIconButton(
+                        icon = Icons.Default.Search,
+                        contentDescription = "Recherche",
+                        onClick = { currentScreen = "search" }
+                    )
+                    ActionIconButton(
+                        icon = Icons.Default.Schedule,
+                        contentDescription = "Guide TV EPG",
+                        onClick = { currentScreen = "epg" }
+                    )
+                    ActionIconButton(
+                        icon = Icons.Default.Settings,
+                        contentDescription = "Paramètres",
+                        onClick = { currentScreen = "settings" }
+                    )
+                }
             }
 
-            // Onglets Centraux (Live, VOD, Séries)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                NavTabItem(
-                    title = "Live TV",
-                    icon = Icons.Default.LiveTv,
-                    isSelected = activeTab == "live",
-                    onClick = { viewModel.switchTab("live") }
-                )
-                NavTabItem(
-                    title = "Films VOD",
-                    icon = Icons.Default.Movie,
-                    isSelected = activeTab == "movies",
-                    onClick = { viewModel.switchTab("movies") }
-                )
-                NavTabItem(
-                    title = "Séries",
-                    icon = Icons.Default.VideoLibrary,
-                    isSelected = activeTab == "series",
-                    onClick = { viewModel.switchTab("series") }
-                )
-            }
-
-            // Boutons d'Action (Recherche, Guide EPG, Paramètres)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ActionIconButton(
-                    icon = Icons.Default.Search,
-                    contentDescription = "Recherche",
-                    onClick = { currentScreen = "search" }
-                )
-                ActionIconButton(
-                    icon = Icons.Default.Schedule,
-                    contentDescription = "Guide TV EPG",
-                    onClick = { currentScreen = "epg" }
-                )
-                ActionIconButton(
-                    icon = Icons.Default.Settings,
-                    contentDescription = "Paramètres",
-                    onClick = { currentScreen = "settings" }
-                )
+            // Ligne 2 : Onglets Centraux Défilants (Live, VOD, Séries)
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                item {
+                    NavTabItem(
+                        title = "Live TV",
+                        icon = Icons.Default.LiveTv,
+                        isSelected = activeTab == "live",
+                        onClick = { viewModel.switchTab("live") }
+                    )
+                }
+                item {
+                    NavTabItem(
+                        title = "Films VOD",
+                        icon = Icons.Default.Movie,
+                        isSelected = activeTab == "movies",
+                        onClick = { viewModel.switchTab("movies") }
+                    )
+                }
+                item {
+                    NavTabItem(
+                        title = "Séries",
+                        icon = Icons.Default.VideoLibrary,
+                        isSelected = activeTab == "series",
+                        onClick = { viewModel.switchTab("series") }
+                    )
+                }
+                if (!isDemoMode) {
+                    item {
+                        Button(
+                            onClick = { viewModel.enableDemoMode() },
+                            colors = ButtonDefaults.buttonColors(containerColor = Slate900),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier
+                                .height(40.dp)
+                                .border(1.dp, Indigo500, RoundedCornerShape(12.dp))
+                        ) {
+                            Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Indigo400, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Tester en Démo", color = Color.White, fontSize = 12.sp)
+                        }
+                    }
+                }
             }
         }
 
@@ -205,10 +268,76 @@ fun HomeScreen(viewModel: MainViewModel) {
             }
             is CatalogUiState.Error -> {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(state.message, color = Color.Red, fontSize = 14.sp)
-                        Button(onClick = { viewModel.bootstrapAndAuthenticate() }, colors = ButtonDefaults.buttonColors(containerColor = Indigo600)) {
-                            Text("Réessayer")
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Slate900),
+                        shape = RoundedCornerShape(16.dp),
+                        modifier = Modifier
+                            .fillMaxWidth(0.92f)
+                            .border(1.dp, Slate800, RoundedCornerShape(16.dp))
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(14.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CloudOff,
+                                contentDescription = null,
+                                tint = Sky400,
+                                modifier = Modifier.size(52.dp)
+                            )
+                            Text(
+                                text = "Serveur Backend non joignable",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 18.sp
+                            )
+                            Text(
+                                text = if (state.message.contains("your_project_id", ignoreCase = true) || com.beshare.tv.data.api.ApiClient.isPlaceholderUrl(context)) {
+                                    "L'application pointe actuellement sur l'adresse modèle par défaut (your_project_id.supabase.co).\n\nVous pouvez lancer le Mode Démo pour explorer l'interface et le lecteur dès maintenant, ou configurer votre URL Supabase."
+                                } else {
+                                    state.message
+                                },
+                                color = Slate400,
+                                fontSize = 13.sp,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                            )
+
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Button(
+                                    onClick = { viewModel.enableDemoMode() },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Indigo600),
+                                    shape = RoundedCornerShape(10.dp),
+                                    modifier = Modifier.fillMaxWidth().height(44.dp)
+                                ) {
+                                    Icon(Icons.Default.PlayArrow, contentDescription = null)
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Lancer le Mode Démo (Tester l'application)", fontWeight = FontWeight.Bold)
+                                }
+
+                                OutlinedButton(
+                                    onClick = { showServerDialog = true },
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
+                                    shape = RoundedCornerShape(10.dp),
+                                    modifier = Modifier.fillMaxWidth().height(44.dp)
+                                ) {
+                                    Icon(Icons.Default.Settings, contentDescription = null, tint = Sky400)
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Configurer l'URL Supabase")
+                                }
+
+                                TextButton(
+                                    onClick = { viewModel.bootstrapAndAuthenticate() },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Icon(Icons.Default.Refresh, contentDescription = null, tint = Slate400)
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Réessayer la connexion", color = Slate400)
+                                }
+                            }
                         }
                     }
                 }
@@ -574,4 +703,93 @@ fun SeriesCard(
             }
         }
     }
+}
+
+/**
+ * Boîte de dialogue permettant de saisir ou modifier dynamiquement l'URL Supabase
+ * et la clé publique Anon sans recompiler l'application.
+ */
+@Composable
+fun ServerConfigDialog(
+    currentUrl: String,
+    currentAnonKey: String,
+    onDismiss: () -> Unit,
+    onSave: (String, String) -> Unit
+) {
+    var urlInput by remember { mutableStateOf(currentUrl) }
+    var keyInput by remember { mutableStateOf(currentAnonKey) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = Slate900,
+        shape = RoundedCornerShape(16.dp),
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Icon(Icons.Default.Cloud, contentDescription = null, tint = Sky400)
+                Text("Configuration Serveur Supabase", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            }
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    "Indiquez l'URL de votre passerelle API BeShare TV ou votre référence de projet Supabase.",
+                    color = Slate400,
+                    fontSize = 12.sp
+                )
+
+                OutlinedTextField(
+                    value = urlInput,
+                    onValueChange = { urlInput = it },
+                    label = { Text("URL Backend / Edge Gateway") },
+                    placeholder = { Text("https://[ref].supabase.co") },
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedBorderColor = Indigo400,
+                        unfocusedBorderColor = Slate700,
+                        focusedLabelColor = Indigo400,
+                        unfocusedLabelColor = Slate400
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                OutlinedTextField(
+                    value = keyInput,
+                    onValueChange = { keyInput = it },
+                    label = { Text("Clé Publique Supabase (Anon Key)") },
+                    placeholder = { Text("eyJhbGciOi...") },
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedBorderColor = Indigo400,
+                        unfocusedBorderColor = Slate700,
+                        focusedLabelColor = Indigo400,
+                        unfocusedLabelColor = Slate400
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Text(
+                    "Exemple : https://votrenom.supabase.co/functions/v1/client-api",
+                    color = Slate500,
+                    fontSize = 11.sp
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { onSave(urlInput, keyInput) },
+                colors = ButtonDefaults.buttonColors(containerColor = Indigo600)
+            ) {
+                Text("Enregistrer & Appliquer")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Annuler", color = Slate400)
+            }
+        }
+    )
 }

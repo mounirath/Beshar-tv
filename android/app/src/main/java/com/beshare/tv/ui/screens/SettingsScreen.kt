@@ -36,7 +36,21 @@ fun SettingsScreen(
 ) {
     val context = LocalContext.current
     val deviceId: String = remember(context) { ApiClient.getOrCreateDeviceId(context) }
-    var bufferMode by remember { mutableStateOf("standard") } // "standard", "low_latency", "high_buffer"
+    val isDemoMode by viewModel.isDemoMode.collectAsState()
+    var showServerDialog by remember { mutableStateOf(false) }
+
+    if (showServerDialog) {
+        ServerConfigDialog(
+            currentUrl = ApiClient.getBaseUrl(context),
+            currentAnonKey = ApiClient.getAnonKey(context),
+            onDismiss = { showServerDialog = false },
+            onSave = { newUrl, newKey ->
+                viewModel.saveServerConfig(newUrl, newKey)
+                showServerDialog = false
+                Toast.makeText(context, "Configuration serveur mise à jour !", Toast.LENGTH_SHORT).show()
+            }
+        )
+    }
 
     Column(
         modifier = Modifier
@@ -112,9 +126,57 @@ fun SettingsScreen(
                             Text("Passerelle Backend Supabase", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
                         }
 
-                        SettingRow(label = "URL Edge Gateway", value = "https://[project-ref].supabase.co/functions/v1/client-api")
-                        SettingRow(label = "Statut de Connectivité", value = "Connecté (Sécurisé TLS 1.3)")
-                        SettingRow(label = "Protection Anti-SSRF", value = "Active (Niveau Réseau Strict)")
+                        SettingRow(label = "URL Active", value = ApiClient.getBaseUrl(context))
+                        SettingRow(
+                            label = "Mode Catalogue",
+                            value = if (isDemoMode) "Mode Démonstration (Flux de test)" else "Production Supabase"
+                        )
+                        SettingRow(
+                            label = "Statut URL",
+                            value = if (ApiClient.isPlaceholderUrl(context)) "Non configuré (Valeur modèle)" else "Configuré"
+                        )
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                            Button(
+                                onClick = { showServerDialog = true },
+                                colors = ButtonDefaults.buttonColors(containerColor = Indigo600),
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Changer l'URL", fontSize = 12.sp)
+                            }
+
+                            OutlinedButton(
+                                onClick = {
+                                    if (isDemoMode) {
+                                        viewModel.disableDemoMode()
+                                        Toast.makeText(context, "Mode Démo désactivé", Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        viewModel.enableDemoMode()
+                                        Toast.makeText(context, "Mode Démo activé", Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(
+                                    imageVector = if (isDemoMode) Icons.Default.Close else Icons.Default.PlayArrow,
+                                    contentDescription = null,
+                                    tint = if (isDemoMode) Amber400 else Emerald400,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = if (isDemoMode) "Quitter Démo" else "Mode Démo",
+                                    color = Color.White,
+                                    fontSize = 12.sp
+                                )
+                            }
+                        }
                     }
                 }
             }

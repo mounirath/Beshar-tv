@@ -20,13 +20,18 @@ object ApiClient {
     private var authToken: String? = null
     private var cachedDeviceId: String? = null
 
+    private const val PREFS_NAME = "beshare_device_prefs"
+    private const val KEY_CUSTOM_URL = "custom_client_api_url"
+    private const val KEY_CUSTOM_ANON_KEY = "custom_anon_key"
+    private const val KEY_DEMO_MODE = "demo_mode_enabled"
+
     /**
      * Génère ou récupère l'identifiant matériel unique du terminal (UUID sécurisé).
      */
     fun getOrCreateDeviceId(context: Context): String {
         cachedDeviceId?.let { return it }
 
-        val prefs = context.getSharedPreferences("beshare_device_prefs", Context.MODE_PRIVATE)
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         var deviceId = prefs.getString("device_unique_id", null)
 
         if (deviceId.isNullOrEmpty()) {
@@ -52,14 +57,85 @@ object ApiClient {
         this.authToken = token
     }
 
+    /**
+     * Vérifie si le mode démonstration hors-ligne/échantillon est actif.
+     */
+    fun isDemoMode(context: Context): Boolean {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getBoolean(KEY_DEMO_MODE, false)
+    }
+
+    fun setDemoMode(context: Context, enabled: Boolean) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit().putBoolean(KEY_DEMO_MODE, enabled).apply()
+    }
+
+    /**
+     * Récupère l'URL de base configurée ou celle par défaut.
+     */
+    fun getBaseUrl(context: Context): String {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val custom = prefs.getString(KEY_CUSTOM_URL, null)?.trim()
+        val raw = if (!custom.isNullOrEmpty()) custom else BuildConfig.CLIENT_API_URL
+        return if (raw.endsWith("/")) raw else "$raw/"
+    }
+
+    /**
+     * Récupère la clé Supabase Anon active.
+     */
+    fun getAnonKey(context: Context): String {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val custom = prefs.getString(KEY_CUSTOM_ANON_KEY, null)?.trim()
+        return if (!custom.isNullOrEmpty()) custom else BuildConfig.SUPABASE_ANON_KEY
+    }
+
+    /**
+     * Vérifie si l'URL pointe encore sur le placeholder factice par défaut.
+     */
+    fun isPlaceholderUrl(context: Context): Boolean {
+        val currentUrl = getBaseUrl(context).lowercase()
+        return currentUrl.contains("your_project_id") || currentUrl.contains("your-project-id")
+    }
+
+    /**
+     * Met à jour l'URL et la clé Supabase dynamiquement depuis l'application.
+     */
+    fun updateServerConfig(context: Context, newUrl: String?, newAnonKey: String?) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit().apply {
+            if (newUrl.isNullOrBlank()) {
+                remove(KEY_CUSTOM_URL)
+            } else {
+                var cleanedUrl = newUrl.trim()
+                if (!cleanedUrl.startsWith("http://") && !cleanedUrl.startsWith("https://")) {
+                    cleanedUrl = "https://$cleanedUrl"
+                }
+                if (!cleanedUrl.contains("/functions/v1/client-api") && cleanedUrl.contains(".supabase.co")) {
+                    cleanedUrl = "${cleanedUrl.removeSuffix("/")}/functions/v1/client-api/"
+                }
+                putString(KEY_CUSTOM_URL, cleanedUrl)
+            }
+
+            if (newAnonKey.isNullOrBlank()) {
+                remove(KEY_CUSTOM_ANON_KEY)
+            } else {
+                putString(KEY_CUSTOM_ANON_KEY, newAnonKey.trim())
+            }
+            apply()
+        }
+        // Réinitialise le service Retrofit
+        apiService = null
+    }
+
     fun getService(context: Context): BeShareApiService {
         if (apiService == null) {
             val deviceId = getOrCreateDeviceId(context)
+            val anonKey = getAnonKey(context)
 
             val headerInterceptor = Interceptor { chain ->
                 val original = chain.request()
                 val requestBuilder = original.newBuilder()
-                    .header("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                    .header("apikey", anonKey)
                     .header("x-device-id", deviceId)
                     .header("x-device-type", if (isTvDevice(context)) "android_tv" else "android_mobile")
                     .header("x-app-version", BuildConfig.VERSION_NAME)
@@ -82,9 +158,7 @@ object ApiClient {
                 .readTimeout(25, TimeUnit.SECONDS)
                 .build()
 
-            val baseUrl = BuildConfig.CLIENT_API_URL.let {
-                if (it.endsWith("/")) it else "$it/"
-            }
+            val baseUrl = getBaseUrl(context)
 
             val retrofit = Retrofit.Builder()
                 .baseUrl(baseUrl)
