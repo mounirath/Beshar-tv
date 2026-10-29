@@ -19,12 +19,14 @@ data class Category(
  */
 data class Channel(
     @SerializedName("id") val id: String,
-    @SerializedName("category_id") val categoryId: String?,
-    @SerializedName("channel_num") val channelNum: Int?,
-    @SerializedName("name") val name: String,
-    @SerializedName("logo_url") val logoUrl: String?,
-    @SerializedName("epg_channel_id") val epgChannelId: String?,
+    @SerializedName("category_id") val categoryId: String? = null,
+    @SerializedName("channel_num") val channelNum: Int? = null,
+    @SerializedName("name") val name: String = "",
+    @SerializedName("logo_url") val logoUrl: String? = null,
+    @SerializedName("epg_channel_id") val epgChannelId: String? = null,
+    @SerializedName("stream_url") val streamUrl: String? = null,
     @SerializedName("stream_type") val streamType: String = "live",
+    @SerializedName("is_active") val isActive: Boolean = true,
     @SerializedName("sort_order") val sortOrder: Int = 0,
     var isFavorite: Boolean = false
 )
@@ -34,15 +36,16 @@ data class Channel(
  */
 data class Movie(
     @SerializedName("id") val id: String,
-    @SerializedName("category_id") val categoryId: String?,
-    @SerializedName("title") val title: String,
-    @SerializedName("title_ar") val titleAr: String?,
-    @SerializedName("poster_url") val posterUrl: String?,
-    @SerializedName("backdrop_url") val backdropUrl: String?,
-    @SerializedName("rating") val rating: Float?,
-    @SerializedName("release_year") val releaseYear: Int?,
-    @SerializedName("duration_mins") val durationMins: Int?,
-    @SerializedName("synopsis") val synopsis: String?
+    @SerializedName("category_id") val categoryId: String? = null,
+    @SerializedName("title") val title: String = "",
+    @SerializedName("title_ar") val titleAr: String? = null,
+    @SerializedName("poster_url") val posterUrl: String? = null,
+    @SerializedName("backdrop_url") val backdropUrl: String? = null,
+    @SerializedName("stream_url") val streamUrl: String? = null,
+    @SerializedName("rating") val rating: Float? = null,
+    @SerializedName("release_year") val releaseYear: Int? = null,
+    @SerializedName("duration_mins") val durationMins: Int? = null,
+    @SerializedName("synopsis") val synopsis: String? = null
 )
 
 /**
@@ -50,14 +53,14 @@ data class Movie(
  */
 data class Series(
     @SerializedName("id") val id: String,
-    @SerializedName("category_id") val categoryId: String?,
-    @SerializedName("title") val title: String,
-    @SerializedName("title_ar") val titleAr: String?,
-    @SerializedName("poster_url") val posterUrl: String?,
-    @SerializedName("backdrop_url") val backdropUrl: String?,
-    @SerializedName("rating") val rating: Float?,
-    @SerializedName("release_year") val releaseYear: Int?,
-    @SerializedName("plot") val plot: String?,
+    @SerializedName("category_id") val categoryId: String? = null,
+    @SerializedName("title") val title: String = "",
+    @SerializedName("title_ar") val titleAr: String? = null,
+    @SerializedName("poster_url") val posterUrl: String? = null,
+    @SerializedName("backdrop_url") val backdropUrl: String? = null,
+    @SerializedName("rating") val rating: Float? = null,
+    @SerializedName("release_year") val releaseYear: Int? = null,
+    @SerializedName("plot") val plot: String? = null,
     @SerializedName("seasons_count") val seasonsCount: Int = 1
 )
 
@@ -66,13 +69,15 @@ data class Series(
  */
 data class Episode(
     @SerializedName("id") val id: String,
-    @SerializedName("series_id") val seriesId: String,
-    @SerializedName("season_number") val seasonNumber: Int,
-    @SerializedName("episode_number") val episodeNumber: Int,
-    @SerializedName("title") val title: String,
-    @SerializedName("duration_mins") val durationMins: Int?,
-    @SerializedName("still_url") val stillUrl: String?,
-    @SerializedName("plot") val plot: String?
+    @SerializedName("series_id") val seriesId: String = "",
+    @SerializedName("season_number") val seasonNumber: Int = 1,
+    @SerializedName("episode_number") val episodeNumber: Int = 1,
+    @SerializedName("title") val title: String = "",
+    @SerializedName("duration_mins") val durationMins: Int? = null,
+    @SerializedName("still_url") val stillUrl: String? = null,
+    @SerializedName("plot") val plot: String? = null,
+    @SerializedName("stream_url") val streamUrl: String? = null,
+    @SerializedName("is_active") val isActive: Boolean = true
 )
 
 /**

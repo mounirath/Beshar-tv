@@ -35,7 +35,7 @@ fun SettingsScreen(
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
-    val deviceId = remember { ApiClient.getDeviceId(context) }
+    val deviceId: String = remember(context) { ApiClient.getOrCreateDeviceId(context) }
     var bufferMode by remember { mutableStateOf("standard") } // "standard", "low_latency", "high_buffer"
 
     Column(

@@ -43,6 +43,11 @@ object ApiClient {
         return deviceId
     }
 
+    /**
+     * Alias pratique pour getOrCreateDeviceId
+     */
+    fun getDeviceId(context: Context): String = getOrCreateDeviceId(context)
+
     fun setAuthToken(token: String?) {
         this.authToken = token
     }
