@@ -85,6 +85,19 @@ export const SourceService = {
    * Récupère la liste des sources
    */
   async getSources(): Promise<Source[]> {
+    try {
+      const res = await fetch('/api/sources');
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          localSources = data;
+          return data;
+        }
+      }
+    } catch (e) {
+      // Backend api offline or fallback
+    }
+
     const client = getSupabaseClient();
     if (client) {
       try {
@@ -245,6 +258,34 @@ export const SourceService = {
    * Lancement d'une synchronisation en direct pour une source spécifique
    */
   async triggerSync(sourceId: string): Promise<{ success: boolean; message: string; log?: SyncLog }> {
+    // 1. Essai prioritaire via le serveur Express (synchro réelle de tout le catalogue Xtream / M3U)
+    try {
+      const apiRes = await fetch('/api/sync-source', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ source_id: sourceId }),
+      });
+      if (apiRes.ok) {
+        const data = await apiRes.json();
+        if (data.success) {
+          // Recharger les données locales depuis le serveur
+          const [chs, cats] = await Promise.all([
+            fetch('/api/channels?all=true').then((r) => r.json()).catch(() => []),
+            fetch('/api/categories').then((r) => r.json()).catch(() => []),
+          ]);
+          if (chs.length > 0) localChannels = chs;
+          if (cats.length > 0) localCategories = cats;
+
+          return {
+            success: true,
+            message: data.message || 'Catalogue complet synchronisé avec succès !',
+          };
+        }
+      }
+    } catch (e: any) {
+      console.warn('Backend sync unreachable, falling back:', e.message);
+    }
+
     const client = getSupabaseClient();
     const config = getSavedSupabaseConfig();
 
@@ -560,6 +601,17 @@ export const SourceService = {
    * Récupère les catégories
    */
   async getCategories(): Promise<Category[]> {
+    try {
+      const res = await fetch('/api/categories');
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          localCategories = data;
+          return data;
+        }
+      }
+    } catch {}
+
     const client = getSupabaseClient();
     if (client) {
       try {
@@ -585,6 +637,17 @@ export const SourceService = {
    * Récupère les chaînes
    */
   async getChannels(): Promise<Channel[]> {
+    try {
+      const res = await fetch('/api/channels?all=true');
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          localChannels = data;
+          return data;
+        }
+      }
+    } catch {}
+
     const client = getSupabaseClient();
     if (client) {
       try {
@@ -686,6 +749,17 @@ export const SourceService = {
    * Récupère les journaux de synchronisation
    */
   async getSyncLogs(): Promise<SyncLog[]> {
+    try {
+      const res = await fetch('/api/sync-logs');
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          localSyncLogs = data;
+          return data;
+        }
+      }
+    } catch {}
+
     const client = getSupabaseClient();
     if (client) {
       try {
@@ -702,6 +776,17 @@ export const SourceService = {
    * Récupère les films VOD
    */
   async getMovies(): Promise<Movie[]> {
+    try {
+      const res = await fetch('/api/movies');
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          localMovies = data;
+          return data;
+        }
+      }
+    } catch {}
+
     const client = getSupabaseClient();
     if (client) {
       try {
@@ -727,6 +812,17 @@ export const SourceService = {
    * Récupère les séries TV
    */
   async getSeries(): Promise<Series[]> {
+    try {
+      const res = await fetch('/api/series');
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          localSeries = data;
+          return data;
+        }
+      }
+    } catch {}
+
     const client = getSupabaseClient();
     if (client) {
       try {

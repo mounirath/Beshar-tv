@@ -28,6 +28,7 @@ import {
   Search,
   Check,
   ChevronRight,
+  ChevronLeft,
   ExternalLink,
   Clock,
   Zap,
@@ -242,6 +243,17 @@ export default function App() {
       channelCategoryFilter === 'all' || ch.category_id === channelCategoryFilter;
     return matchesSearch && matchesCategory;
   });
+
+  // Pagination for fast mobile and desktop rendering with thousands of channels
+  const [channelPage, setChannelPage] = useState<number>(1);
+  const pageSize = 60;
+
+  useEffect(() => {
+    setChannelPage(1);
+  }, [channelSearch, channelCategoryFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredChannels.length / pageSize));
+  const paginatedChannels = filteredChannels.slice((channelPage - 1) * pageSize, channelPage * pageSize);
 
   const isAllFilteredSelected =
     filteredChannels.length > 0 &&
@@ -971,11 +983,11 @@ export default function App() {
                       className="w-full pl-8 pr-7 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 appearance-none cursor-pointer"
                     >
                       <option value="all">
-                        {lang === 'fr' ? 'Toutes les catégories' : 'جميع التصنيفات'} ({channels.length})
+                        {lang === 'fr' ? 'Toutes les catégories' : 'جميع التصنيفات'} ({channels.length.toLocaleString()})
                       </option>
                       {categories.map((c) => (
                         <option key={c.id} value={c.id}>
-                          {lang === 'ar' && c.name_ar ? c.name_ar : c.name}
+                          {lang === 'ar' && c.name_ar ? c.name_ar : c.name} {c.channels_count ? `(${c.channels_count})` : ''}
                         </option>
                       ))}
                     </select>
@@ -1188,95 +1200,156 @@ export default function App() {
                   )}
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {filteredChannels.map((ch) => {
-                    const isSelected = selectedChannelIds.has(ch.id);
+                <div className="space-y-4">
+                  {/* Channels Count & Page Summary */}
+                  <div className="flex items-center justify-between text-xs text-slate-400 px-1">
+                    <span>
+                      {lang === 'fr'
+                        ? `Affichage de ${(channelPage - 1) * pageSize + 1} à ${Math.min(channelPage * pageSize, filteredChannels.length)} sur ${filteredChannels.length.toLocaleString()} chaînes`
+                        : `عرض من ${(channelPage - 1) * pageSize + 1} إلى ${Math.min(channelPage * pageSize, filteredChannels.length)} من أصل ${filteredChannels.length.toLocaleString()} قناة`}
+                    </span>
+                    <span className="font-mono text-[11px] text-slate-400">
+                      Page {channelPage} / {totalPages}
+                    </span>
+                  </div>
 
-                    return (
-                      <div
-                        key={ch.id}
-                        onClick={() => handleToggleSelectChannel(ch.id)}
-                        className={`p-4 rounded-xl border transition-all flex items-center justify-between group cursor-pointer ${
-                          isSelected
-                            ? 'bg-indigo-950/40 border-indigo-500/70 ring-1 ring-indigo-500/40 shadow-lg shadow-indigo-950/30'
-                            : ch.is_active
-                            ? 'bg-slate-900 border-slate-800 hover:border-slate-700 shadow-md'
-                            : 'bg-slate-900/50 border-slate-850 opacity-60'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          {/* Channel Select Checkbox */}
-                          <div
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleToggleSelectChannel(ch.id);
-                            }}
-                            className={`w-5 h-5 rounded-md flex items-center justify-center transition-all shrink-0 cursor-pointer ${
-                              isSelected
-                                ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/40 ring-2 ring-indigo-500'
-                                : 'bg-slate-950 border border-slate-700 group-hover:border-indigo-400 text-transparent'
-                            }`}
-                            title={isSelected ? (lang === 'fr' ? 'Désélectionner' : 'إلغاء التحديد') : (lang === 'fr' ? 'Sélectionner' : 'تحديد')}
-                          >
-                            <Check className="w-3.5 h-3.5 stroke-[3]" />
-                          </div>
+                  {/* Paginated Channels Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {paginatedChannels.map((ch) => {
+                      const isSelected = selectedChannelIds.has(ch.id);
 
-                          {ch.logo_url ? (
-                            <img
-                              src={ch.logo_url}
-                              alt={ch.name}
-                              className="w-10 h-10 rounded-xl object-contain bg-slate-950 p-1 border border-slate-800 shrink-0"
-                            />
-                          ) : (
-                            <div className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center shrink-0">
-                              <Radio className="w-5 h-5" />
-                            </div>
-                          )}
-                          <div className="min-w-0">
-                            <div className="font-bold text-xs text-white truncate flex items-center gap-1.5">
-                              {ch.channel_num && (
-                                <span className="text-[10px] font-mono text-slate-400 bg-slate-800 px-1.5 py-0.2 rounded">
-                                  #{ch.channel_num}
-                                </span>
-                              )}
-                              <span className="truncate">{ch.name}</span>
-                            </div>
-                            <div className="text-[11px] text-slate-400 truncate mt-0.5">
-                              {ch.category_name || (lang === 'fr' ? 'Généraliste' : 'عام')}
-                            </div>
-                          </div>
-                        </div>
-
+                      return (
                         <div
-                          className="flex items-center gap-1.5 shrink-0"
-                          onClick={(e) => e.stopPropagation()}
+                          key={ch.id}
+                          onClick={() => handleToggleSelectChannel(ch.id)}
+                          className={`p-4 rounded-xl border transition-all flex items-center justify-between group cursor-pointer ${
+                            isSelected
+                              ? 'bg-indigo-950/40 border-indigo-500/70 ring-1 ring-indigo-500/40 shadow-lg shadow-indigo-950/30'
+                              : ch.is_active
+                              ? 'bg-slate-900 border-slate-800 hover:border-slate-700 shadow-md'
+                              : 'bg-slate-900/50 border-slate-850 opacity-60'
+                          }`}
                         >
-                          {/* Live Test Stream Button */}
-                          <button
-                            onClick={() => handlePlayChannel(ch)}
-                            className="px-2.5 py-1.5 rounded-lg bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 border border-sky-500/30 text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer"
-                            title={lang === 'fr' ? 'Tester le flux en direct' : 'تجربة تشغيل البث'}
-                          >
-                            <Play className="w-3.5 h-3.5" />
-                            <span className="hidden sm:inline">{lang === 'fr' ? 'Tester' : 'تشغيل'}</span>
-                          </button>
+                          <div className="flex items-center gap-3 min-w-0">
+                            {/* Channel Select Checkbox */}
+                            <div
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleToggleSelectChannel(ch.id);
+                              }}
+                              className={`w-5 h-5 rounded-md flex items-center justify-center transition-all shrink-0 cursor-pointer ${
+                                isSelected
+                                  ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/40 ring-2 ring-indigo-500'
+                                  : 'bg-slate-950 border border-slate-700 group-hover:border-indigo-400 text-transparent'
+                              }`}
+                              title={isSelected ? (lang === 'fr' ? 'Désélectionner' : 'إلغاء التحديد') : (lang === 'fr' ? 'Sélectionner' : 'تحديد')}
+                            >
+                              <Check className="w-3.5 h-3.5 stroke-[3]" />
+                            </div>
 
-                          {/* Active Toggle */}
-                          <button
-                            onClick={() => handleToggleChannel(ch.id, ch.is_active)}
-                            className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
-                              ch.is_active
-                                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                                : 'bg-slate-800 text-slate-400 border-slate-700'
-                            }`}
-                            title={ch.is_active ? 'Actif' : 'Inactif'}
+                            {ch.logo_url ? (
+                              <img
+                                src={ch.logo_url}
+                                alt={ch.name}
+                                className="w-10 h-10 rounded-xl object-contain bg-slate-950 p-1 border border-slate-800 shrink-0"
+                                onError={(e) => {
+                                  (e.target as HTMLElement).style.display = 'none';
+                                }}
+                              />
+                            ) : (
+                              <div className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center shrink-0">
+                                <Radio className="w-5 h-5" />
+                              </div>
+                            )}
+                            <div className="min-w-0">
+                              <div className="font-bold text-xs text-white truncate flex items-center gap-1.5">
+                                {ch.channel_num && (
+                                  <span className="text-[10px] font-mono text-slate-400 bg-slate-800 px-1.5 py-0.2 rounded">
+                                    #{ch.channel_num}
+                                  </span>
+                                )}
+                                <span className="truncate">{ch.name}</span>
+                              </div>
+                              <div className="text-[11px] text-slate-400 truncate mt-0.5">
+                                {ch.category_name || (lang === 'fr' ? 'Généraliste' : 'عام')}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div
+                            className="flex items-center gap-1.5 shrink-0"
+                            onClick={(e) => e.stopPropagation()}
                           >
-                            <Power className="w-3.5 h-3.5" />
-                          </button>
+                            {/* Live Test Stream Button */}
+                            <button
+                              onClick={() => handlePlayChannel(ch)}
+                              className="px-2.5 py-1.5 rounded-lg bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 border border-sky-500/30 text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer"
+                              title={lang === 'fr' ? 'Tester le flux en direct' : 'تجربة تشغيل البث'}
+                            >
+                              <Play className="w-3.5 h-3.5" />
+                              <span className="hidden sm:inline">{lang === 'fr' ? 'Tester' : 'تشغيل'}</span>
+                            </button>
+
+                            {/* Active Toggle */}
+                            <button
+                              onClick={() => handleToggleChannel(ch.id, ch.is_active)}
+                              className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
+                                ch.is_active
+                                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                  : 'bg-slate-800 text-slate-400 border-slate-700'
+                              }`}
+                              title={ch.is_active ? 'Actif' : 'Inactif'}
+                            >
+                              <Power className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Pagination Bar */}
+                  {totalPages > 1 && (
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-3.5 rounded-xl bg-slate-900 border border-slate-800 text-xs shadow-lg">
+                      <button
+                        onClick={() => setChannelPage((p) => Math.max(1, p - 1))}
+                        disabled={channelPage === 1}
+                        className="px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5 transition-all cursor-pointer w-full sm:w-auto justify-center"
+                      >
+                        <ChevronLeft className={`w-4 h-4 ${isRTL ? 'rotate-180' : ''}`} />
+                        <span>{lang === 'fr' ? 'Précédent' : 'السابق'}</span>
+                      </button>
+
+                      <div className="flex items-center gap-2">
+                        <span className="text-slate-400 text-xs">
+                          {lang === 'fr' ? 'Page' : 'صفحة'}
+                        </span>
+                        <select
+                          value={channelPage}
+                          onChange={(e) => setChannelPage(Number(e.target.value))}
+                          className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1 text-xs text-white font-mono focus:outline-none focus:border-indigo-500 cursor-pointer"
+                        >
+                          {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                            <option key={p} value={p}>
+                              {p}
+                            </option>
+                          ))}
+                        </select>
+                        <span className="text-slate-400 text-xs font-mono">
+                          / {totalPages}
+                        </span>
                       </div>
-                    );
-                  })}
+
+                      <button
+                        onClick={() => setChannelPage((p) => Math.min(totalPages, p + 1))}
+                        disabled={channelPage === totalPages}
+                        className="px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5 transition-all cursor-pointer w-full sm:w-auto justify-center"
+                      >
+                        <span>{lang === 'fr' ? 'Suivant' : 'التالي'}</span>
+                        <ChevronRight className={`w-4 h-4 ${isRTL ? 'rotate-180' : ''}`} />
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
