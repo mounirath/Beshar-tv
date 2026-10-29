@@ -45,13 +45,14 @@ import { SyncLogsView } from './components/SyncLogsView';
 import { VercelDeployGuide } from './components/VercelDeployGuide';
 import { AndroidApiPlayground } from './components/AndroidApiPlayground';
 import { AndroidCodeExplorer } from './components/AndroidCodeExplorer';
+import { EndToEndTestRunner } from './components/EndToEndTestRunner';
 import { getSavedSupabaseConfig, saveSupabaseConfig, getSupabaseClient } from './lib/supabase';
 import { testUrlSSRF } from './lib/edgeTester';
 import { SQL_TABLES } from './data/schemaData';
 
 export default function App() {
   const [lang, setLang] = useState<'fr' | 'ar'>('fr');
-  const [activeSection, setActiveSection] = useState<'sources' | 'channels' | 'categories' | 'logs' | 'android_api' | 'android_code' | 'ssrf_lab' | 'database' | 'vercel'>('android_code');
+  const [activeSection, setActiveSection] = useState<'sources' | 'channels' | 'categories' | 'logs' | 'android_api' | 'android_code' | 'e2e_tests' | 'ssrf_lab' | 'database' | 'vercel'>('e2e_tests');
 
   // Core Data State
   const [sources, setSources] = useState<Source[]>([]);
@@ -386,6 +387,23 @@ export default function App() {
               </div>
               <span className="px-1.5 py-0.5 rounded text-[10px] bg-purple-500/20 text-purple-300 font-mono">
                 KOTLIN
+              </span>
+            </button>
+
+            <button
+              onClick={() => setActiveSection('e2e_tests')}
+              className={`w-full flex items-center justify-between p-3 rounded-xl text-xs font-semibold transition-all shrink-0 ${
+                activeSection === 'e2e_tests'
+                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
+                  : 'bg-slate-900 text-slate-300 hover:bg-slate-850 hover:text-white border border-slate-800/80'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                <span>{lang === 'fr' ? 'Tests Bout en Bout (Étape 6)' : 'الفحص الشامل (المرحلة 6)'}</span>
+              </div>
+              <span className="px-1.5 py-0.5 rounded text-[10px] bg-emerald-500/20 text-emerald-300 font-mono">
+                TESTS
               </span>
             </button>
 
@@ -793,6 +811,11 @@ export default function App() {
           {/* SECTION: ANDROID KOTLIN CODE EXPLORER (ÉTAPE 5) */}
           {activeSection === 'android_code' && (
             <AndroidCodeExplorer lang={lang} />
+          )}
+
+          {/* SECTION: END-TO-END TESTS RUNNER (ÉTAPE 6) */}
+          {activeSection === 'e2e_tests' && (
+            <EndToEndTestRunner lang={lang} />
           )}
 
           {/* SECTION 7: VERCEL DEPLOYMENT */}
