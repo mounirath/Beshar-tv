@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="320dp"
+    android:height="180dp"
+    android:viewportWidth="320"
+    android:viewportHeight="180">
+    <!-- Dark slate gradient background -->
+    <path
+        android:fillColor="#0B1329"
+        android:pathData="M0,0h320v180h-320z" />
+    <path
+        android:fillColor="#1E293B"
+        android:pathData="M0,90 L320,180 L0,180 Z" />
+    <path
+        android:fillColor="#064E3B"
+        android:pathData="M0,0 L160,0 L0,160 Z" />
+
+    <!-- Center TV Graphic -->
+    <group
+        android:translateX="100"
+        android:translateY="30">
+        <!-- Bezel -->
+        <path
+            android:fillColor="#10B981"
+            android:pathData="M16,10 C11.6,10 8,13.6 8,18 L8,86 C8,90.4 11.6,94 16,94 L104,94 C108.4,94 112,90.4 112,86 L112,18 C112,13.6 108.4,10 104,10 Z" />
+        <!-- Screen -->
+        <path
+            android:fillColor="#0F172A"
+            android:pathData="M14,16 C14,13.8 15.8,12 18,12 L102,12 C104.2,12 106,13.8 106,16 L106,84 C106,86.2 104.2,88 102,88 L18,88 C15.8,88 14,86.2 14,84 Z" />
+        <!-- Play Arrow -->
+        <path
+            android:fillColor="#34D399"
+            android:pathData="M50,34 L78,50 L50,66 Z" />
+        <!-- Stand -->
+        <path
+            android:fillColor="#6366F1"
+            android:pathData="M48,96 L72,96 L76,104 L44,104 Z" />
+    </group>
+</vector>

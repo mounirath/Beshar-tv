@@ -291,16 +291,20 @@ data class Series(val id: String, val title: String, val seasonsCount: Int)`}</p
 
           {selectedFile === 'manifest' && (
             <pre>{`<!-- AndroidManifest.xml -->
-<uses-feature android:name="android.software.leanback" android:required="false" />
-<uses-feature android:name="android.hardware.touchscreen" android:required="false" />
-
-<activity android:name=".MainActivity" android:exported="true">
-    <intent-filter>
-        <action android:name="android.intent.action.MAIN" />
-        <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
-        <category android:name="android.intent.category.LAUNCHER" />
-    </intent-filter>
-</activity>`}</pre>
+<application
+    android:icon="@drawable/ic_launcher"
+    android:banner="@drawable/tv_banner"
+    android:roundIcon="@drawable/ic_launcher_round"
+    android:theme="@style/Theme.BeShareTV">
+    
+    <activity android:name=".MainActivity" android:exported="true">
+        <intent-filter>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent-filter>
+    </activity>
+</application>`}</pre>
           )}
 
           {selectedFile === 'gradle' && (
