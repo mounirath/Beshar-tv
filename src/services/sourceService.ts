@@ -700,7 +700,80 @@ export const SourceService = {
    * Bascule l'état actif d'une chaîne
    */
   async toggleChannelActive(id: string, current: boolean): Promise<boolean> {
+    const client = getSupabaseClient();
+    if (client && !id.startsWith('ch-')) {
+      try {
+        await client.from('channels').update({ is_active: !current }).eq('id', id);
+      } catch (err) {
+        console.warn('Supabase toggleChannelActive error:', err);
+      }
+    }
     localChannels = localChannels.map((ch) => (ch.id === id ? { ...ch, is_active: !current } : ch));
+    return true;
+  },
+
+  /**
+   * Suppression groupée de plusieurs chaînes
+   */
+  async deleteChannels(ids: string[]): Promise<boolean> {
+    const client = getSupabaseClient();
+    const realIds = ids.filter((id) => !id.startsWith('ch-'));
+    if (client && realIds.length > 0) {
+      try {
+        await client.from('channels').delete().in('id', realIds);
+      } catch (err) {
+        console.warn('Supabase batch delete error:', err);
+      }
+    }
+    const idSet = new Set(ids);
+    localChannels = localChannels.filter((ch) => !idSet.has(ch.id));
+    return true;
+  },
+
+  /**
+   * Activation ou désactivation groupée de chaînes
+   */
+  async setChannelsActive(ids: string[], isActive: boolean): Promise<boolean> {
+    const client = getSupabaseClient();
+    const realIds = ids.filter((id) => !id.startsWith('ch-'));
+    if (client && realIds.length > 0) {
+      try {
+        await client.from('channels').update({ is_active: isActive }).in('id', realIds);
+      } catch (err) {
+        console.warn('Supabase batch setChannelsActive error:', err);
+      }
+    }
+    const idSet = new Set(ids);
+    localChannels = localChannels.map((ch) =>
+      idSet.has(ch.id) ? { ...ch, is_active: isActive } : ch
+    );
+    return true;
+  },
+
+  /**
+   * Déplacement groupé de chaînes vers une catégorie cible
+   */
+  async moveChannelsToCategory(ids: string[], targetCategoryId: string): Promise<boolean> {
+    const targetCat = localCategories.find((c) => c.id === targetCategoryId);
+    const client = getSupabaseClient();
+    const realIds = ids.filter((id) => !id.startsWith('ch-'));
+    if (client && realIds.length > 0) {
+      try {
+        await client.from('channels').update({ category_id: targetCategoryId }).in('id', realIds);
+      } catch (err) {
+        console.warn('Supabase batch moveChannelsToCategory error:', err);
+      }
+    }
+    const idSet = new Set(ids);
+    localChannels = localChannels.map((ch) =>
+      idSet.has(ch.id)
+        ? {
+            ...ch,
+            category_id: targetCategoryId,
+            category_name: targetCat ? targetCat.name : ch.category_name,
+          }
+        : ch
+    );
     return true;
   },
 

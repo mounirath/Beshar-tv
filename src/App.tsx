@@ -34,7 +34,13 @@ import {
   Power,
   Smartphone,
   Code2,
-  Calendar
+  Calendar,
+  CheckSquare,
+  Square,
+  Minus,
+  FolderInput,
+  X,
+  Filter
 } from 'lucide-react';
 
 import { Source, Category, Channel, SyncLog } from './types';
@@ -182,6 +188,13 @@ export default function App() {
     setIsPlayerOpen(true);
   };
 
+  // Channel Bulk Actions State
+  const [selectedChannelIds, setSelectedChannelIds] = useState<Set<string>>(new Set());
+  const [channelCategoryFilter, setChannelCategoryFilter] = useState<string>('all');
+  const [isMoveCategoryOpen, setIsMoveCategoryOpen] = useState(false);
+  const [targetCategoryForMove, setTargetCategoryForMove] = useState<string>('');
+  const [batchActionLoading, setBatchActionLoading] = useState(false);
+
   const handleToggleCategory = async (id: string, current: boolean) => {
     await SourceService.toggleCategoryVisibility(id, current);
     const cats = await SourceService.getCategories();
@@ -194,10 +207,112 @@ export default function App() {
     setChannels(chs);
   };
 
-  const filteredChannels = channels.filter((ch) =>
-    ch.name.toLowerCase().includes(channelSearch.toLowerCase()) ||
-    (ch.category_name && ch.category_name.toLowerCase().includes(channelSearch.toLowerCase()))
-  );
+  const filteredChannels = channels.filter((ch) => {
+    const matchesSearch =
+      ch.name.toLowerCase().includes(channelSearch.toLowerCase()) ||
+      (ch.category_name && ch.category_name.toLowerCase().includes(channelSearch.toLowerCase()));
+    const matchesCategory =
+      channelCategoryFilter === 'all' || ch.category_id === channelCategoryFilter;
+    return matchesSearch && matchesCategory;
+  });
+
+  const isAllFilteredSelected =
+    filteredChannels.length > 0 &&
+    filteredChannels.every((ch) => selectedChannelIds.has(ch.id));
+
+  const isSomeFilteredSelected =
+    filteredChannels.some((ch) => selectedChannelIds.has(ch.id)) && !isAllFilteredSelected;
+
+  const handleToggleSelectChannel = (id: string) => {
+    setSelectedChannelIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const handleSelectAllFiltered = () => {
+    if (isAllFilteredSelected) {
+      // Unselect all filtered channels
+      setSelectedChannelIds((prev) => {
+        const next = new Set(prev);
+        filteredChannels.forEach((ch) => next.delete(ch.id));
+        return next;
+      });
+    } else {
+      // Select all filtered channels
+      setSelectedChannelIds((prev) => {
+        const next = new Set(prev);
+        filteredChannels.forEach((ch) => next.add(ch.id));
+        return next;
+      });
+    }
+  };
+
+  const handleClearSelection = () => {
+    setSelectedChannelIds(new Set());
+  };
+
+  const handleBatchToggleActive = async (isActive: boolean) => {
+    if (selectedChannelIds.size === 0) return;
+    setBatchActionLoading(true);
+    const ids = Array.from(selectedChannelIds);
+    await SourceService.setChannelsActive(ids, isActive);
+    const updated = await SourceService.getChannels();
+    setChannels(updated);
+    setBatchActionLoading(false);
+    showNotification(
+      'success',
+      lang === 'fr'
+        ? `${ids.length} chaîne(s) ${isActive ? 'activée(s)' : 'désactivée(s)'} avec succès`
+        : `${isActive ? 'تم تفعيل' : 'تم تعطيل'} ${ids.length} قناة بنجاح`
+    );
+  };
+
+  const handleBatchDelete = async () => {
+    if (selectedChannelIds.size === 0) return;
+    const count = selectedChannelIds.size;
+    const confirmMsg =
+      lang === 'fr'
+        ? `Supprimer définitivement ${count} chaîne(s) sélectionnée(s) ?`
+        : `هل أنت متأكد من حذف ${count} قناة محددة بشكل نهائي؟`;
+    if (!window.confirm(confirmMsg)) return;
+
+    setBatchActionLoading(true);
+    const ids = Array.from(selectedChannelIds);
+    await SourceService.deleteChannels(ids);
+    setSelectedChannelIds(new Set());
+    await loadAllData();
+    setBatchActionLoading(false);
+    showNotification(
+      'success',
+      lang === 'fr'
+        ? `${count} chaîne(s) supprimée(s) avec succès`
+        : `تم حذف ${count} قناة بنجاح`
+    );
+  };
+
+  const handleBatchMoveCategory = async () => {
+    if (selectedChannelIds.size === 0 || !targetCategoryForMove) return;
+    setBatchActionLoading(true);
+    const ids = Array.from(selectedChannelIds);
+    await SourceService.moveChannelsToCategory(ids, targetCategoryForMove);
+    setIsMoveCategoryOpen(false);
+    const targetCat = categories.find((c) => c.id === targetCategoryForMove);
+    setTargetCategoryForMove('');
+    await loadAllData();
+    setBatchActionLoading(false);
+    showNotification(
+      'success',
+      lang === 'fr'
+        ? `${ids.length} chaîne(s) déplacée(s) vers « ${targetCat?.name || 'Catégorie'} »`
+        : `تم نقل ${ids.length} قناة إلى « ${targetCat?.name_ar || targetCat?.name || 'التصنيف'} »`
+    );
+  };
 
   return (
     <div className={`min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans ${isRTL ? 'rtl' : 'ltr'}`} dir={isRTL ? 'rtl' : 'ltr'}>
@@ -671,7 +786,8 @@ export default function App() {
           {/* SECTION 2: CHANNELS & STREAM PLAYER */}
           {activeSection === 'channels' && (
             <div className="space-y-4">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow-xl">
+              {/* Header with Search and Category Filter */}
+              <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3 bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow-xl">
                 <div>
                   <h2 className="text-lg font-bold text-white flex items-center gap-2">
                     <Radio className="w-5 h-5 text-sky-400" />
@@ -679,87 +795,359 @@ export default function App() {
                   </h2>
                   <p className="text-xs text-slate-400 mt-1">
                     {lang === 'fr'
-                      ? 'Testez la lecture directe de vos flux HLS (.m3u8) et vérifiez la conformité des chaînes pour Android TV.'
-                      : 'تجربة تشغيل روابط HLS ومطابقتها قبل بثها إلى شاشات أندرويد.'}
+                      ? 'Testez vos flux, activez ou déplacez vos chaînes par lot en un clic.'
+                      : 'تجربة تشغيل روابط HLS، وتفعيل أو نقل أو حذف القنوات دفعة واحدة.'}
                   </p>
                 </div>
 
-                <div className="relative w-full sm:w-64">
-                  <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-                  <input
-                    type="text"
-                    placeholder={lang === 'fr' ? 'Rechercher une chaîne...' : 'بحث عن قناة...'}
-                    value={channelSearch}
-                    onChange={(e) => setChannelSearch(e.target.value)}
-                    className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-                  />
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full lg:w-auto">
+                  {/* Category Filter Select */}
+                  <div className="relative min-w-[180px]">
+                    <Filter className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                    <select
+                      value={channelCategoryFilter}
+                      onChange={(e) => setChannelCategoryFilter(e.target.value)}
+                      className="w-full pl-8 pr-7 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 appearance-none cursor-pointer"
+                    >
+                      <option value="all">
+                        {lang === 'fr' ? 'Toutes les catégories' : 'جميع التصنيفات'} ({channels.length})
+                      </option>
+                      {categories.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {lang === 'ar' && c.name_ar ? c.name_ar : c.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Search Input */}
+                  <div className="relative w-full sm:w-60">
+                    <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                    <input
+                      type="text"
+                      placeholder={lang === 'fr' ? 'Rechercher une chaîne...' : 'بحث عن قناة...'}
+                      value={channelSearch}
+                      onChange={(e) => setChannelSearch(e.target.value)}
+                      className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
                 </div>
               </div>
 
-              {/* Channels Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                {filteredChannels.map((ch) => (
-                  <div
-                    key={ch.id}
-                    className={`p-4 rounded-xl border transition-all flex items-center justify-between group ${
-                      ch.is_active
-                        ? 'bg-slate-900 border-slate-800 hover:border-slate-700 shadow-md'
-                        : 'bg-slate-900/50 border-slate-850 opacity-60'
-                    }`}
+              {/* Bulk Actions Control Bar */}
+              <div className={`p-3.5 rounded-2xl border transition-all flex flex-wrap items-center justify-between gap-3 ${
+                selectedChannelIds.size > 0
+                  ? 'bg-indigo-950/40 border-indigo-500/40 shadow-lg shadow-indigo-950/30'
+                  : 'bg-slate-900/80 border-slate-800'
+              }`}>
+                {/* Select All Checkbox & Count */}
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={handleSelectAllFiltered}
+                    className="flex items-center gap-2.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-200 text-xs font-semibold border border-slate-700 transition-all cursor-pointer"
+                    title={isAllFilteredSelected ? (lang === 'fr' ? 'Tout désélectionner' : 'إلغاء تحديد الكل') : (lang === 'fr' ? 'Tout sélectionner' : 'تحديد الكل')}
                   >
-                    <div className="flex items-center gap-3 min-w-0">
-                      {ch.logo_url ? (
-                        <img
-                          src={ch.logo_url}
-                          alt={ch.name}
-                          className="w-10 h-10 rounded-xl object-contain bg-slate-950 p-1 border border-slate-800 shrink-0"
-                        />
-                      ) : (
-                        <div className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center shrink-0">
-                          <Radio className="w-5 h-5" />
-                        </div>
-                      )}
-                      <div className="min-w-0">
-                        <div className="font-bold text-xs text-white truncate flex items-center gap-1.5">
-                          {ch.channel_num && (
-                            <span className="text-[10px] font-mono text-slate-400 bg-slate-800 px-1.5 py-0.2 rounded">
-                              #{ch.channel_num}
-                            </span>
+                    <span className={`w-4 h-4 rounded flex items-center justify-center transition-colors ${
+                      isAllFilteredSelected
+                        ? 'bg-indigo-600 text-white'
+                        : isSomeFilteredSelected
+                        ? 'bg-indigo-600/40 text-indigo-300'
+                        : 'border border-slate-500'
+                    }`}>
+                      {isAllFilteredSelected ? (
+                        <Check className="w-3 h-3 stroke-[3]" />
+                      ) : isSomeFilteredSelected ? (
+                        <Minus className="w-3 h-3 stroke-[3]" />
+                      ) : null}
+                    </span>
+                    <span>
+                      {isAllFilteredSelected
+                        ? (lang === 'fr' ? 'Tout désélectionner' : 'إلغاء التحديد')
+                        : (lang === 'fr' ? 'Tout sélectionner' : 'تحديد الكل')}
+                    </span>
+                  </button>
+
+                  {/* Selection counter badge */}
+                  {selectedChannelIds.size > 0 ? (
+                    <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-xs font-semibold">
+                      <span className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse" />
+                      {selectedChannelIds.size} {lang === 'fr' ? 'sélectionnée(s)' : 'محددة'}
+                    </span>
+                  ) : (
+                    <span className="text-xs text-slate-400">
+                      {lang === 'fr'
+                        ? `${filteredChannels.length} chaîne(s) affichée(s)`
+                        : `عرض ${filteredChannels.length} قناة`}
+                    </span>
+                  )}
+                </div>
+
+                {/* Batch Actions Buttons (Active when at least 1 is selected) */}
+                {selectedChannelIds.size > 0 && (
+                  <div className="flex flex-wrap items-center gap-2 animate-in fade-in duration-200">
+                    {/* Batch Activate */}
+                    <button
+                      type="button"
+                      disabled={batchActionLoading}
+                      onClick={() => handleBatchToggleActive(true)}
+                      className="px-3 py-1.5 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+                      title={lang === 'fr' ? 'Activer les chaînes sélectionnées' : 'تفعيل القنوات المحددة'}
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>{lang === 'fr' ? 'Activer' : 'تفعيل'}</span>
+                    </button>
+
+                    {/* Batch Deactivate */}
+                    <button
+                      type="button"
+                      disabled={batchActionLoading}
+                      onClick={() => handleBatchToggleActive(false)}
+                      className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-300 border border-slate-700 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+                      title={lang === 'fr' ? 'Désactiver les chaînes sélectionnées' : 'تعطيل القنوات المحددة'}
+                    >
+                      <Power className="w-3.5 h-3.5 text-slate-400" />
+                      <span>{lang === 'fr' ? 'Désactiver' : 'تعطيل'}</span>
+                    </button>
+
+                    {/* Batch Move to Category */}
+                    <button
+                      type="button"
+                      disabled={batchActionLoading}
+                      onClick={() => {
+                        setTargetCategoryForMove(categories[0]?.id || '');
+                        setIsMoveCategoryOpen(true);
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow-md shadow-indigo-600/20 transition-all cursor-pointer disabled:opacity-50"
+                      title={lang === 'fr' ? 'Déplacer vers une autre catégorie' : 'نقل إلى تصنيف آخر'}
+                    >
+                      <FolderInput className="w-3.5 h-3.5" />
+                      <span>{lang === 'fr' ? 'Déplacer vers...' : 'نقل إلى تصنيف...'}</span>
+                    </button>
+
+                    {/* Batch Delete */}
+                    <button
+                      type="button"
+                      disabled={batchActionLoading}
+                      onClick={handleBatchDelete}
+                      className="px-3 py-1.5 rounded-xl bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+                      title={lang === 'fr' ? 'Supprimer les chaînes sélectionnées' : 'حذف القنوات المحددة'}
+                    >
+                      <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                      <span>{lang === 'fr' ? 'Supprimer' : 'حذف'}</span>
+                    </button>
+
+                    {/* Clear selection */}
+                    <button
+                      type="button"
+                      onClick={handleClearSelection}
+                      className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                      title={lang === 'fr' ? 'Annuler la sélection' : 'إلغاء التحديد'}
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Channels Grid */}
+              {filteredChannels.length === 0 ? (
+                <div className="p-12 text-center bg-slate-900 border border-slate-800 rounded-2xl space-y-3">
+                  <div className="w-12 h-12 rounded-2xl bg-slate-800 flex items-center justify-center mx-auto text-slate-500">
+                    <Radio className="w-6 h-6" />
+                  </div>
+                  <div className="font-bold text-white text-sm">
+                    {lang === 'fr' ? 'Aucune chaîne trouvée' : 'لم يتم العثور على قنوات'}
+                  </div>
+                  <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                    {lang === 'fr'
+                      ? 'Essayez de modifier votre recherche ou filtre de catégorie pour voir les chaînes disponibles.'
+                      : 'جرب تغيير معايير البحث أو اختيار تصنيف آخر لعرض القنوات.'}
+                  </p>
+                  {(channelSearch || channelCategoryFilter !== 'all') && (
+                    <button
+                      onClick={() => {
+                        setChannelSearch('');
+                        setChannelCategoryFilter('all');
+                      }}
+                      className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition-all cursor-pointer"
+                    >
+                      {lang === 'fr' ? 'Réinitialiser les filtres' : 'إعادة ضبط الفلاتر'}
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {filteredChannels.map((ch) => {
+                    const isSelected = selectedChannelIds.has(ch.id);
+
+                    return (
+                      <div
+                        key={ch.id}
+                        onClick={() => handleToggleSelectChannel(ch.id)}
+                        className={`p-4 rounded-xl border transition-all flex items-center justify-between group cursor-pointer ${
+                          isSelected
+                            ? 'bg-indigo-950/40 border-indigo-500/70 ring-1 ring-indigo-500/40 shadow-lg shadow-indigo-950/30'
+                            : ch.is_active
+                            ? 'bg-slate-900 border-slate-800 hover:border-slate-700 shadow-md'
+                            : 'bg-slate-900/50 border-slate-850 opacity-60'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          {/* Channel Select Checkbox */}
+                          <div
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleToggleSelectChannel(ch.id);
+                            }}
+                            className={`w-5 h-5 rounded-md flex items-center justify-center transition-all shrink-0 cursor-pointer ${
+                              isSelected
+                                ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/40 ring-2 ring-indigo-500'
+                                : 'bg-slate-950 border border-slate-700 group-hover:border-indigo-400 text-transparent'
+                            }`}
+                            title={isSelected ? (lang === 'fr' ? 'Désélectionner' : 'إلغاء التحديد') : (lang === 'fr' ? 'Sélectionner' : 'تحديد')}
+                          >
+                            <Check className="w-3.5 h-3.5 stroke-[3]" />
+                          </div>
+
+                          {ch.logo_url ? (
+                            <img
+                              src={ch.logo_url}
+                              alt={ch.name}
+                              className="w-10 h-10 rounded-xl object-contain bg-slate-950 p-1 border border-slate-800 shrink-0"
+                            />
+                          ) : (
+                            <div className="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center shrink-0">
+                              <Radio className="w-5 h-5" />
+                            </div>
                           )}
-                          <span className="truncate">{ch.name}</span>
+                          <div className="min-w-0">
+                            <div className="font-bold text-xs text-white truncate flex items-center gap-1.5">
+                              {ch.channel_num && (
+                                <span className="text-[10px] font-mono text-slate-400 bg-slate-800 px-1.5 py-0.2 rounded">
+                                  #{ch.channel_num}
+                                </span>
+                              )}
+                              <span className="truncate">{ch.name}</span>
+                            </div>
+                            <div className="text-[11px] text-slate-400 truncate mt-0.5">
+                              {ch.category_name || (lang === 'fr' ? 'Généraliste' : 'عام')}
+                            </div>
+                          </div>
                         </div>
-                        <div className="text-[11px] text-slate-400 truncate mt-0.5">
-                          {ch.category_name || (lang === 'fr' ? 'Généraliste' : 'عام')}
+
+                        <div
+                          className="flex items-center gap-1.5 shrink-0"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {/* Live Test Stream Button */}
+                          <button
+                            onClick={() => handlePlayChannel(ch)}
+                            className="px-2.5 py-1.5 rounded-lg bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 border border-sky-500/30 text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer"
+                            title={lang === 'fr' ? 'Tester le flux en direct' : 'تجربة تشغيل البث'}
+                          >
+                            <Play className="w-3.5 h-3.5" />
+                            <span className="hidden sm:inline">{lang === 'fr' ? 'Tester' : 'تشغيل'}</span>
+                          </button>
+
+                          {/* Active Toggle */}
+                          <button
+                            onClick={() => handleToggleChannel(ch.id, ch.is_active)}
+                            className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
+                              ch.is_active
+                                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                : 'bg-slate-800 text-slate-400 border-slate-700'
+                            }`}
+                            title={ch.is_active ? 'Actif' : 'Inactif'}
+                          >
+                            <Power className="w-3.5 h-3.5" />
+                          </button>
                         </div>
                       </div>
-                    </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
 
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      {/* Live Test Stream Button */}
-                      <button
-                        onClick={() => handlePlayChannel(ch)}
-                        className="px-2.5 py-1.5 rounded-lg bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 border border-sky-500/30 text-xs font-semibold flex items-center gap-1 transition-all"
-                        title={lang === 'fr' ? 'Tester le flux en direct' : 'تجربة تشغيل البث'}
-                      >
-                        <Play className="w-3.5 h-3.5" />
-                        <span className="hidden sm:inline">{lang === 'fr' ? 'Tester' : 'تشغيل'}</span>
-                      </button>
-
-                      {/* Active Toggle */}
-                      <button
-                        onClick={() => handleToggleChannel(ch.id, ch.is_active)}
-                        className={`p-1.5 rounded-lg border transition-colors ${
-                          ch.is_active
-                            ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                            : 'bg-slate-800 text-slate-400 border-slate-700'
-                        }`}
-                        title={ch.is_active ? 'Actif' : 'Inactif'}
-                      >
-                        <Power className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
+          {/* MOVE TO CATEGORY BATCH MODAL */}
+          {isMoveCategoryOpen && (
+            <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                  <div className="flex items-center gap-2">
+                    <FolderInput className="w-5 h-5 text-indigo-400" />
+                    <h3 className="font-bold text-base text-white">
+                      {lang === 'fr' ? 'Déplacer vers une catégorie' : 'نقل إلى تصنيف'}
+                    </h3>
                   </div>
-                ))}
+                  <button
+                    onClick={() => setIsMoveCategoryOpen(false)}
+                    className="p-1 rounded-lg text-slate-400 hover:text-white transition-colors"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <p className="text-xs text-slate-300">
+                  {lang === 'fr'
+                    ? `Choisissez la catégorie de destination pour les ${selectedChannelIds.size} chaîne(s) sélectionnée(s) :`
+                    : `اختر التصنيف الجديد لـ ${selectedChannelIds.size} قناة محددة :`}
+                </p>
+
+                <div className="max-h-60 overflow-y-auto space-y-2 pr-1">
+                  {categories.map((cat) => (
+                    <label
+                      key={cat.id}
+                      onClick={() => setTargetCategoryForMove(cat.id)}
+                      className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all ${
+                        targetCategoryForMove === cat.id
+                          ? 'bg-indigo-600/20 border-indigo-500 text-white'
+                          : 'bg-slate-950 border-slate-800 text-slate-300 hover:bg-slate-850'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <input
+                          type="radio"
+                          name="targetCategory"
+                          checked={targetCategoryForMove === cat.id}
+                          onChange={() => setTargetCategoryForMove(cat.id)}
+                          className="accent-indigo-600"
+                        />
+                        <span className="text-xs font-semibold">
+                          {lang === 'ar' && cat.name_ar ? cat.name_ar : cat.name}
+                        </span>
+                      </div>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 font-mono">
+                        {cat.category_type}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+
+                <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => setIsMoveCategoryOpen(false)}
+                    className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-all cursor-pointer"
+                  >
+                    {lang === 'fr' ? 'Annuler' : 'إلغاء'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!targetCategoryForMove || batchActionLoading}
+                    onClick={handleBatchMoveCategory}
+                    className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-lg shadow-indigo-600/20 transition-all cursor-pointer disabled:opacity-50 flex items-center gap-2"
+                  >
+                    <FolderInput className="w-4 h-4" />
+                    <span>
+                      {lang === 'fr'
+                        ? `Déplacer (${selectedChannelIds.size})`
+                        : `نقل (${selectedChannelIds.size})`}
+                    </span>
+                  </button>
+                </div>
               </div>
             </div>
           )}
