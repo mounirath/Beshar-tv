@@ -164,10 +164,15 @@ export const EpgGuideView: React.FC<EpgGuideViewProps> = ({ lang, channels, onPl
           <p className="text-xs text-slate-400">{lang === 'fr' ? 'Chargement de la grille EPG...' : 'جاري تحميل الدليل...'}</p>
         </div>
       ) : filteredPrograms.length === 0 ? (
-        <div className="text-center py-16 bg-slate-900/40 rounded-2xl border border-slate-800/60">
-          <Calendar className="w-10 h-10 text-slate-600 mx-auto mb-2" />
-          <p className="text-xs text-slate-400">
-            {lang === 'fr' ? 'Aucun programme disponible pour ce filtre.' : 'لا توجد برامج متاحة لهذا الفلتر.'}
+        <div className="text-center py-16 bg-slate-900/40 rounded-2xl border border-slate-800/60 space-y-2">
+          <Calendar className="w-10 h-10 text-slate-600 mx-auto" />
+          <div className="font-semibold text-white text-xs">
+            {lang === 'fr' ? 'Aucun programme disponible' : 'لا توجد برامج متاحة'}
+          </div>
+          <p className="text-[11px] text-slate-400 max-w-sm mx-auto">
+            {lang === 'fr'
+              ? 'Ajoutez et synchronisez vos sources Xtream Codes ou M3U pour alimenter le guide des programmes (EPG).'
+              : 'أضف اشتراكك في Xtream Codes أو M3U لعرض الدليل الإلكتروني للبرامج (EPG).'}
           </p>
         </div>
       ) : (

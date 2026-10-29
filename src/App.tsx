@@ -40,10 +40,11 @@ import {
   Minus,
   FolderInput,
   X,
-  Filter
+  Filter,
+  RotateCcw
 } from 'lucide-react';
 
-import { Source, Category, Channel, SyncLog } from './types';
+import { Source, Category, Channel, SyncLog, SourceType } from './types';
 import { SourceService } from './services/sourceService';
 import { SourceModal } from './components/SourceModal';
 import { StreamPlayerModal } from './components/StreamPlayerModal';
@@ -130,15 +131,41 @@ export default function App() {
     setTimeout(() => setActionNotice(null), 4000);
   };
 
+  // Source modal configuration state
+  const [sourceTypeForModal, setSourceTypeForModal] = useState<SourceType>('xtream');
+
   // Actions
-  const handleAddSource = () => {
+  const handleAddSourceWithType = (type: SourceType = 'xtream') => {
     setEditingSource(null);
+    setSourceTypeForModal(type);
     setIsSourceModalOpen(true);
+  };
+
+  const handleAddSource = () => {
+    handleAddSourceWithType('xtream');
   };
 
   const handleEditSource = (source: Source) => {
     setEditingSource(source);
+    setSourceTypeForModal(source.type);
     setIsSourceModalOpen(true);
+  };
+
+  const handleResetAllData = async () => {
+    const confirmMsg =
+      lang === 'fr'
+        ? 'Réinitialiser entièrement les données locales ? Tous les serveurs et chaînes seront vidés.'
+        : 'هل أنت متأكد من تفريغ كافة البيانات؟ سيتم مسح كافة السيرفرات والقنوات المحلية.';
+    if (!window.confirm(confirmMsg)) return;
+
+    SourceService.clearAllData();
+    await loadAllData();
+    showNotification(
+      'success',
+      lang === 'fr'
+        ? 'Toutes les données ont été réinitialisées avec succès'
+        : 'تم تفريغ وحذف جميع البيانات بنجاح'
+    );
   };
 
   const handleToggleSource = async (id: string, current: boolean) => {
@@ -177,7 +204,7 @@ export default function App() {
   const handlePlayStream = (title: string, streamUrl: string) => {
     setPlayingChannel({
       id: `preview-${Date.now()}`,
-      source_id: 'src-2',
+      source_id: 'preview',
       name: title,
       stream_url: streamUrl,
       stream_type: 'vod',
@@ -634,152 +661,286 @@ export default function App() {
                   </h2>
                   <p className="text-xs text-slate-400 mt-1">
                     {lang === 'fr'
-                      ? 'Configurez vos sources M3U, Xtream Codes et Stalker Portal. Lancement et diagnostic en direct.'
-                      : 'إعداد مصادر M3U و Xtream Codes و Stalker Portal. إطلاق المزامنة والفحص الفوري.'}
+                      ? 'Configurez exclusivement vos propres accès Xtream Codes, Stalker Portal ou M3U. Aucun serveur par défaut.'
+                      : 'إعداد اشتراكاتك الخاصة حصرياً (Xtream Codes أو Stalker أو M3U). لا توجد أي سيرفرات افتراضية.'}
                   </p>
                 </div>
 
-                <button
-                  onClick={handleAddSource}
-                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-2 shadow-lg shadow-indigo-600/20 transition-all self-stretch sm:self-auto justify-center"
-                >
-                  <Plus className="w-4 h-4" />
-                  {lang === 'fr' ? 'Nouvelle Source' : 'إضافة مصدر'}
-                </button>
+                <div className="flex items-center gap-2 self-stretch sm:self-auto">
+                  {sources.length > 0 && (
+                    <button
+                      onClick={handleResetAllData}
+                      className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-rose-500/15 hover:text-rose-400 hover:border-rose-500/40 border border-slate-700 text-slate-400 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer"
+                      title={lang === 'fr' ? 'Tout réinitialiser' : 'إعادة ضبط وحذف الكل'}
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      <span>{lang === 'fr' ? 'Tout vider' : 'تفريغ الكل'}</span>
+                    </button>
+                  )}
+
+                  <button
+                    onClick={handleAddSource}
+                    className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-2 shadow-lg shadow-indigo-600/20 transition-all justify-center cursor-pointer flex-1 sm:flex-initial"
+                  >
+                    <Plus className="w-4 h-4" />
+                    {lang === 'fr' ? 'Nouvelle Source' : 'إضافة مصدر'}
+                  </button>
+                </div>
               </div>
 
-              {/* Sources Cards Grid */}
-              <div className="grid grid-cols-1 gap-4">
-                {sources.map((src) => {
-                  const isSyncing = syncingId === src.id || src.last_sync_status === 'running';
+              {/* Sources List or Empty State */}
+              {sources.length === 0 ? (
+                <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-10 text-center space-y-6 shadow-xl">
+                  <div className="w-16 h-16 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center mx-auto shadow-inner">
+                    <Server className="w-8 h-8" />
+                  </div>
 
-                  return (
+                  <div className="max-w-xl mx-auto space-y-2">
+                    <h3 className="text-lg sm:text-xl font-bold text-white tracking-tight">
+                      {lang === 'fr'
+                        ? 'Tous les serveurs par défaut ont été retirés'
+                        : 'تمت إزالة كافة السيرفرات الافتراضية'}
+                    </h3>
+                    <p className="text-xs sm:text-sm text-slate-400 leading-relaxed">
+                      {lang === 'fr'
+                        ? 'Ajoutez directement vos propres identifiants Xtream Codes IPTV, votre portail Stalker (MAG) ou votre playlist M3U pour alimenter votre catalogue :'
+                        : 'أضف مباشرة بيانات اشتراكك في Xtream Codes أو بوابة Stalker (MAG) أو رابط M3U لبدء الاستخدام:'}
+                    </p>
+                  </div>
+
+                  {/* 3 Quick Action Cards */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-left max-w-4xl mx-auto pt-2">
+                    {/* 1. Xtream Codes */}
                     <div
-                      key={src.id}
-                      className={`p-5 rounded-2xl border transition-all ${
-                        src.is_active
-                          ? 'bg-slate-900/90 border-slate-800 hover:border-slate-700 shadow-xl'
-                          : 'bg-slate-900/40 border-slate-850 opacity-70'
-                      }`}
+                      onClick={() => handleAddSourceWithType('xtream')}
+                      className="group relative p-5 rounded-2xl bg-slate-950/90 border border-purple-500/30 hover:border-purple-400 hover:bg-purple-950/20 transition-all cursor-pointer shadow-lg flex flex-col justify-between"
                     >
-                      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                        <div className="space-y-2">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className={`px-2.5 py-0.5 rounded-lg text-xs font-bold uppercase ${
-                              src.type === 'm3u'
-                                ? 'bg-sky-500/15 text-sky-400 border border-sky-500/30'
-                                : src.type === 'xtream'
-                                ? 'bg-purple-500/15 text-purple-400 border border-purple-500/30'
-                                : 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
-                            }`}>
-                              {src.type === 'm3u' ? 'M3U / M3U8' : src.type === 'xtream' ? 'Xtream Codes' : 'Stalker Portal'}
-                            </span>
-
-                            <h3 className="font-bold text-sm text-white">{src.name}</h3>
-
-                            {/* Status Badge */}
-                            {src.last_sync_status === 'success' && (
-                              <span className="px-2 py-0.5 rounded-full text-[10px] bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-medium flex items-center gap-1">
-                                <CheckCircle2 className="w-3 h-3" /> {lang === 'fr' ? 'Synchronisé' : 'متزامن'}
-                              </span>
-                            )}
-                            {src.last_sync_status === 'failed' && (
-                              <span className="px-2 py-0.5 rounded-full text-[10px] bg-rose-500/15 text-rose-400 border border-rose-500/30 font-medium flex items-center gap-1">
-                                <AlertTriangle className="w-3 h-3" /> {lang === 'fr' ? 'Erreur' : 'خطأ'}
-                              </span>
-                            )}
-                            {isSyncing && (
-                              <span className="px-2 py-0.5 rounded-full text-[10px] bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-medium flex items-center gap-1 animate-pulse">
-                                <RefreshCw className="w-3 h-3 animate-spin" /> {lang === 'fr' ? 'Synchro en cours...' : 'جارٍ المزامنة...'}
-                              </span>
-                            )}
-                          </div>
-
-                          {/* URL & Credentials Summary (Sanitized) */}
-                          <div className="font-mono text-xs text-slate-400 flex flex-wrap items-center gap-4">
-                            <span className="truncate max-w-md">
-                              {src.server_url.replace(/(live\/[^\/]+\/)[^\/]+(\/)/, '$1[PROTÉGÉ]$2')}
-                            </span>
-                            {src.type === 'stalker' && src.mac_address && (
-                              <span className="text-amber-400">MAC: {src.mac_address}</span>
-                            )}
-                            {src.type === 'xtream' && (
-                              <span className="text-indigo-400">User: {src.username}</span>
-                            )}
-                          </div>
-
-                          {/* Last Sync Info */}
-                          <div className="flex items-center gap-3 text-[11px] text-slate-500">
-                            <span className="flex items-center gap-1">
-                              <Clock className="w-3 h-3" />
-                              {lang === 'fr' ? 'Dernière synchro :' : 'آخر مزامنة:'}{' '}
-                              {src.last_sync_at ? new Date(src.last_sync_at).toLocaleString() : (lang === 'fr' ? 'Jamais' : 'أبداً')}
-                            </span>
-                            <span>•</span>
-                            <span>
-                              {lang === 'fr' ? 'Fréquence :' : 'الدورة:'} {src.sync_interval_hours}h
-                            </span>
-                          </div>
-
-                          {/* Error message preview if failed */}
-                          {src.last_error && (
-                            <div className="p-2.5 rounded-lg bg-rose-950/40 border border-rose-500/30 text-rose-200 text-xs font-mono">
-                              <span className="font-bold text-rose-400">Erreur : </span>
-                              {src.last_error}
-                            </div>
-                          )}
+                      <div className="space-y-3">
+                        <div className="w-10 h-10 rounded-xl bg-purple-500/15 border border-purple-500/30 text-purple-400 flex items-center justify-center group-hover:scale-110 transition-transform">
+                          <Zap className="w-5 h-5" />
                         </div>
-
-                        {/* Action Buttons */}
-                        <div className="flex flex-wrap items-center gap-2 self-end lg:self-center shrink-0">
-                          {/* Sync Button */}
-                          <button
-                            onClick={() => handleLaunchSync(src.id)}
-                            disabled={isSyncing}
-                            className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-1.5 transition-all shadow-md shadow-indigo-600/20 disabled:opacity-50"
-                          >
-                            <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
-                            {isSyncing
-                              ? (lang === 'fr' ? 'Synchro...' : 'مزامنة...')
-                              : (lang === 'fr' ? 'Synchroniser' : 'مزامنة الآن')}
-                          </button>
-
-                          {/* Toggle Active Switch */}
-                          <button
-                            onClick={() => handleToggleSource(src.id, src.is_active)}
-                            className={`p-2 rounded-xl border transition-colors ${
-                              src.is_active
-                                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20'
-                                : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'
-                            }`}
-                            title={src.is_active ? (lang === 'fr' ? 'Désactiver la source' : 'تعطيل المصدر') : (lang === 'fr' ? 'Activer la source' : 'تفعيل المصدر')}
-                          >
-                            <Power className="w-4 h-4" />
-                          </button>
-
-                          {/* Edit Source */}
-                          <button
-                            onClick={() => handleEditSource(src)}
-                            className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors"
-                            title={lang === 'fr' ? 'Modifier' : 'تعديل'}
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </button>
-
-                          {/* Delete Source */}
-                          <button
-                            onClick={() => handleDeleteSource(src.id)}
-                            className="p-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 transition-colors"
-                            title={lang === 'fr' ? 'Supprimer' : 'حذف'}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                        <div>
+                          <div className="flex items-center justify-between">
+                            <h4 className="font-bold text-sm text-white group-hover:text-purple-300 transition-colors">
+                              Xtream Codes IPTV
+                            </h4>
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 font-mono">
+                              RECOMMANDÉ
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">
+                            {lang === 'fr'
+                              ? 'URL du serveur, identifiant (Username) et mot de passe (Password).'
+                              : 'رابط الخادم واسم المستخدم وكلمة مرور حساب Xtream.'}
+                          </p>
                         </div>
                       </div>
+
+                      <div className="pt-4 mt-4 border-t border-slate-800/80 flex items-center justify-between text-xs font-semibold text-purple-400 group-hover:text-purple-300">
+                        <span>{lang === 'fr' ? 'Configurer Xtream Codes' : 'إعداد Xtream Codes'}</span>
+                        <ChevronRight className={`w-4 h-4 ${isRTL ? 'rotate-180' : ''}`} />
+                      </div>
                     </div>
-                  );
-                })}
-              </div>
+
+                    {/* 2. Stalker Portal */}
+                    <div
+                      onClick={() => handleAddSourceWithType('stalker')}
+                      className="group relative p-5 rounded-2xl bg-slate-950/90 border border-amber-500/30 hover:border-amber-400 hover:bg-amber-950/20 transition-all cursor-pointer shadow-lg flex flex-col justify-between"
+                    >
+                      <div className="space-y-3">
+                        <div className="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400 flex items-center justify-center group-hover:scale-110 transition-transform">
+                          <Radio className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <div className="flex items-center justify-between">
+                            <h4 className="font-bold text-sm text-white group-hover:text-amber-300 transition-colors">
+                              Portail Stalker (MAG)
+                            </h4>
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-mono">
+                              MAC MAG
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">
+                            {lang === 'fr'
+                              ? 'URL du portail Ministra / Stalker et votre adresse MAC MAG (00:1A:79:...).'
+                              : 'رابط بوابة Stalker مع عنوان MAC للجهاز المسجل (00:1A:79:...).'}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="pt-4 mt-4 border-t border-slate-800/80 flex items-center justify-between text-xs font-semibold text-amber-400 group-hover:text-amber-300">
+                        <span>{lang === 'fr' ? 'Configurer Stalker' : 'إعداد بوابة Stalker'}</span>
+                        <ChevronRight className={`w-4 h-4 ${isRTL ? 'rotate-180' : ''}`} />
+                      </div>
+                    </div>
+
+                    {/* 3. M3U Playlist */}
+                    <div
+                      onClick={() => handleAddSourceWithType('m3u')}
+                      className="group relative p-5 rounded-2xl bg-slate-950/90 border border-sky-500/30 hover:border-sky-400 hover:bg-sky-950/20 transition-all cursor-pointer shadow-lg flex flex-col justify-between"
+                    >
+                      <div className="space-y-3">
+                        <div className="w-10 h-10 rounded-xl bg-sky-500/15 border border-sky-500/30 text-sky-400 flex items-center justify-center group-hover:scale-110 transition-transform">
+                          <ListVideo className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <div className="flex items-center justify-between">
+                            <h4 className="font-bold text-sm text-white group-hover:text-sky-300 transition-colors">
+                              Lien M3U / M3U8
+                            </h4>
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 font-mono">
+                              FICHIER / LIEN
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">
+                            {lang === 'fr'
+                              ? 'Lien direct HTTP/HTTPS vers votre playlist M3U ou flux M3U8.'
+                              : 'رابط مباشر لقائمة تشغيل M3U أو بث M3U8 مباشر.'}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="pt-4 mt-4 border-t border-slate-800/80 flex items-center justify-between text-xs font-semibold text-sky-400 group-hover:text-sky-300">
+                        <span>{lang === 'fr' ? 'Configurer M3U' : 'إعداد رابط M3U'}</span>
+                        <ChevronRight className={`w-4 h-4 ${isRTL ? 'rotate-180' : ''}`} />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                /* Sources Cards Grid */
+                <div className="grid grid-cols-1 gap-4">
+                  {sources.map((src) => {
+                    const isSyncing = syncingId === src.id || src.last_sync_status === 'running';
+
+                    return (
+                      <div
+                        key={src.id}
+                        className={`p-5 rounded-2xl border transition-all ${
+                          src.is_active
+                            ? 'bg-slate-900/90 border-slate-800 hover:border-slate-700 shadow-xl'
+                            : 'bg-slate-900/40 border-slate-855 opacity-70'
+                        }`}
+                      >
+                        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                          <div className="space-y-2">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className={`px-2.5 py-0.5 rounded-lg text-xs font-bold uppercase ${
+                                src.type === 'm3u'
+                                  ? 'bg-sky-500/15 text-sky-400 border border-sky-500/30'
+                                  : src.type === 'xtream'
+                                  ? 'bg-purple-500/15 text-purple-400 border border-purple-500/30'
+                                  : 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
+                              }`}>
+                                {src.type === 'm3u' ? 'M3U / M3U8' : src.type === 'xtream' ? 'Xtream Codes' : 'Stalker Portal'}
+                              </span>
+
+                              <h3 className="font-bold text-sm text-white">{src.name}</h3>
+
+                              {/* Status Badge */}
+                              {src.last_sync_status === 'success' && (
+                                <span className="px-2 py-0.5 rounded-full text-[10px] bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-medium flex items-center gap-1">
+                                  <CheckCircle2 className="w-3 h-3" /> {lang === 'fr' ? 'Synchronisé' : 'متزامن'}
+                                </span>
+                              )}
+                              {src.last_sync_status === 'failed' && (
+                                <span className="px-2 py-0.5 rounded-full text-[10px] bg-rose-500/15 text-rose-400 border border-rose-500/30 font-medium flex items-center gap-1">
+                                  <AlertTriangle className="w-3 h-3" /> {lang === 'fr' ? 'Erreur' : 'خطأ'}
+                                </span>
+                              )}
+                              {isSyncing && (
+                                <span className="px-2 py-0.5 rounded-full text-[10px] bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-medium flex items-center gap-1 animate-pulse">
+                                  <RefreshCw className="w-3 h-3 animate-spin" /> {lang === 'fr' ? 'Synchro en cours...' : 'جارٍ المزامنة...'}
+                                </span>
+                              )}
+                            </div>
+
+                            {/* URL & Credentials Summary (Sanitized) */}
+                            <div className="font-mono text-xs text-slate-400 flex flex-wrap items-center gap-4">
+                              <span className="truncate max-w-md">
+                                {src.server_url.replace(/(live\/[^\/]+\/)[^\/]+(\/)/, '$1[PROTÉGÉ]$2')}
+                              </span>
+                              {src.type === 'stalker' && src.mac_address && (
+                                <span className="text-amber-400">MAC: {src.mac_address}</span>
+                              )}
+                              {src.type === 'xtream' && (
+                                <span className="text-indigo-400">User: {src.username}</span>
+                              )}
+                            </div>
+
+                            {/* Last Sync Info */}
+                            <div className="flex items-center gap-3 text-[11px] text-slate-500">
+                              <span className="flex items-center gap-1">
+                                <Clock className="w-3 h-3" />
+                                {lang === 'fr' ? 'Dernière synchro :' : 'آخر مزامنة:'}{' '}
+                                {src.last_sync_at ? new Date(src.last_sync_at).toLocaleString() : (lang === 'fr' ? 'Jamais' : 'أبداً')}
+                              </span>
+                              <span>•</span>
+                              <span>
+                                {lang === 'fr' ? 'Fréquence :' : 'الدورة:'} {src.sync_interval_hours}h
+                              </span>
+                            </div>
+
+                            {/* Error message preview if failed */}
+                            {src.last_error && (
+                              <div className="p-2.5 rounded-lg bg-rose-950/40 border border-rose-500/30 text-rose-200 text-xs font-mono">
+                                <span className="font-bold text-rose-400">Erreur : </span>
+                                {src.last_error}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Action Buttons */}
+                          <div className="flex flex-wrap items-center gap-2 self-end lg:self-center shrink-0">
+                            {/* Sync Button */}
+                            <button
+                              onClick={() => handleLaunchSync(src.id)}
+                              disabled={isSyncing}
+                              className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-1.5 transition-all shadow-md shadow-indigo-600/20 disabled:opacity-50 cursor-pointer"
+                            >
+                              <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+                              {isSyncing
+                                ? (lang === 'fr' ? 'Synchro...' : 'مزامنة...')
+                                : (lang === 'fr' ? 'Synchroniser' : 'مزامنة الآن')}
+                            </button>
+
+                            {/* Toggle Active Switch */}
+                            <button
+                              onClick={() => handleToggleSource(src.id, src.is_active)}
+                              className={`p-2 rounded-xl border transition-colors cursor-pointer ${
+                                src.is_active
+                                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20'
+                                  : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'
+                              }`}
+                              title={src.is_active ? (lang === 'fr' ? 'Désactiver la source' : 'تعطيل المصدر') : (lang === 'fr' ? 'Activer la source' : 'تفعيل المصدر')}
+                            >
+                              <Power className="w-4 h-4" />
+                            </button>
+
+                            {/* Edit Source */}
+                            <button
+                              onClick={() => handleEditSource(src)}
+                              className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors cursor-pointer"
+                              title={lang === 'fr' ? 'Modifier' : 'تعديل'}
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+
+                            {/* Delete Source */}
+                            <button
+                              onClick={() => handleDeleteSource(src.id)}
+                              className="p-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 transition-colors cursor-pointer"
+                              title={lang === 'fr' ? 'Supprimer' : 'حذف'}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
 
@@ -952,28 +1113,78 @@ export default function App() {
 
               {/* Channels Grid */}
               {filteredChannels.length === 0 ? (
-                <div className="p-12 text-center bg-slate-900 border border-slate-800 rounded-2xl space-y-3">
-                  <div className="w-12 h-12 rounded-2xl bg-slate-800 flex items-center justify-center mx-auto text-slate-500">
-                    <Radio className="w-6 h-6" />
+                <div className="p-10 sm:p-14 text-center bg-slate-900 border border-slate-800 rounded-2xl space-y-4">
+                  <div className="w-14 h-14 rounded-2xl bg-slate-800/80 border border-slate-700 text-sky-400 flex items-center justify-center mx-auto shadow-inner">
+                    <Radio className="w-7 h-7" />
                   </div>
-                  <div className="font-bold text-white text-sm">
-                    {lang === 'fr' ? 'Aucune chaîne trouvée' : 'لم يتم العثور على قنوات'}
-                  </div>
-                  <p className="text-xs text-slate-400 max-w-sm mx-auto">
-                    {lang === 'fr'
-                      ? 'Essayez de modifier votre recherche ou filtre de catégorie pour voir les chaînes disponibles.'
-                      : 'جرب تغيير معايير البحث أو اختيار تصنيف آخر لعرض القنوات.'}
-                  </p>
-                  {(channelSearch || channelCategoryFilter !== 'all') && (
-                    <button
-                      onClick={() => {
-                        setChannelSearch('');
-                        setChannelCategoryFilter('all');
-                      }}
-                      className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition-all cursor-pointer"
-                    >
-                      {lang === 'fr' ? 'Réinitialiser les filtres' : 'إعادة ضبط الفلاتر'}
-                    </button>
+
+                  {sources.length === 0 ? (
+                    <div className="max-w-md mx-auto space-y-2">
+                      <div className="font-bold text-white text-base">
+                        {lang === 'fr' ? 'Aucune chaîne — Aucun serveur actif' : 'لا توجد قنوات — لا يوجد سيرفر مفعل حالياً'}
+                      </div>
+                      <p className="text-xs text-slate-400 leading-relaxed">
+                        {lang === 'fr'
+                          ? 'Tous les serveurs par défaut ont été retirés. Ajoutez directement votre compte Xtream Codes, votre portail Stalker ou votre fichier M3U pour commencer.'
+                          : 'تمت إزالة كافة السيرفرات الافتراضية. أضف بيانات اشتراكك في Xtream Codes أو Stalker أو M3U لتحميل القنوات مباشرة.'}
+                      </p>
+                      <div className="pt-3 flex flex-wrap items-center justify-center gap-2">
+                        <button
+                          onClick={() => handleAddSourceWithType('xtream')}
+                          className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow-md shadow-purple-600/20 transition-all cursor-pointer"
+                        >
+                          <Zap className="w-4 h-4" />
+                          <span>{lang === 'fr' ? 'Ajouter Xtream Codes' : 'إضافة Xtream Codes'}</span>
+                        </button>
+                        <button
+                          onClick={() => handleAddSourceWithType('m3u')}
+                          className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer"
+                        >
+                          <ListVideo className="w-4 h-4" />
+                          <span>{lang === 'fr' ? 'Ajouter M3U / Stalker' : 'إضافة M3U / Stalker'}</span>
+                        </button>
+                      </div>
+                    </div>
+                  ) : channels.length === 0 ? (
+                    <div className="max-w-md mx-auto space-y-2">
+                      <div className="font-bold text-white text-base">
+                        {lang === 'fr' ? 'Aucune chaîne synchronisée' : 'لم يتم استيراد قنوات بعد'}
+                      </div>
+                      <p className="text-xs text-slate-400 leading-relaxed">
+                        {lang === 'fr'
+                          ? 'Vos sources sont configurées mais aucune chaîne n’a encore été synchronisée. Lancez une synchronisation depuis l’onglet Sources.'
+                          : 'مصادر البث معرفة لديك ولكن لم تتم مزامنة القنوات بعد. اضغط على زر المزامنة في قسم السيرفرات.'}
+                      </p>
+                      <div className="pt-2">
+                        <button
+                          onClick={() => setActiveSection('sources')}
+                          className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow-md shadow-indigo-600/20 transition-all cursor-pointer mx-auto"
+                        >
+                          <Server className="w-4 h-4" />
+                          <span>{lang === 'fr' ? 'Aller aux Sources & Synchroniser' : 'الانتقال لقسم السيرفرات والمزامنة'}</span>
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="max-w-md mx-auto space-y-2">
+                      <div className="font-bold text-white text-base">
+                        {lang === 'fr' ? 'Aucune chaîne ne correspond à vos filtres' : 'لا توجد قنوات تطابق البحث الحالي'}
+                      </div>
+                      <p className="text-xs text-slate-400 leading-relaxed">
+                        {lang === 'fr'
+                          ? 'Essayez de modifier votre recherche ou filtre de catégorie pour voir les chaînes disponibles.'
+                          : 'جرب تغيير معايير البحث أو اختيار تصنيف آخر لعرض القنوات.'}
+                      </p>
+                      <button
+                        onClick={() => {
+                          setChannelSearch('');
+                          setChannelCategoryFilter('all');
+                        }}
+                        className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition-all cursor-pointer mx-auto"
+                      >
+                        {lang === 'fr' ? 'Réinitialiser les filtres' : 'إعادة ضبط الفلاتر'}
+                      </button>
+                    </div>
                   )}
                 </div>
               ) : (
@@ -1288,6 +1499,7 @@ export default function App() {
         onClose={() => setIsSourceModalOpen(false)}
         onSaved={loadAllData}
         sourceToEdit={editingSource}
+        defaultType={sourceTypeForModal}
         lang={lang}
       />
 

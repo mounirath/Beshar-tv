@@ -163,9 +163,16 @@ export const VodManager: React.FC<VodManagerProps> = ({ lang, onPlayStream }) =>
         </div>
       ) : tab === 'movies' ? (
         filteredMovies.length === 0 ? (
-          <div className="text-center py-16 bg-slate-900/40 rounded-2xl border border-slate-800/60">
-            <Film className="w-10 h-10 text-slate-600 mx-auto mb-2" />
-            <p className="text-xs text-slate-400">{lang === 'fr' ? 'Aucun film trouvé.' : 'لم يتم العثور على أفلام.'}</p>
+          <div className="text-center py-16 bg-slate-900/40 rounded-2xl border border-slate-800/60 space-y-2">
+            <Film className="w-10 h-10 text-slate-600 mx-auto" />
+            <div className="font-semibold text-white text-xs">
+              {lang === 'fr' ? 'Aucun film dans le catalogue' : 'لا توجد أفلام في الكتالوج'}
+            </div>
+            <p className="text-[11px] text-slate-400 max-w-sm mx-auto">
+              {lang === 'fr'
+                ? 'Tous les serveurs démo ont été retirés. Synchronisez votre source Xtream Codes IPTV pour importer vos films VOD.'
+                : 'تمت إزالة السيرفرات الافتراضية. قم بمزامنة اشتراك Xtream Codes لتحميل مكتبة الأفلام الخاصة بك.'}
+            </p>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
@@ -266,9 +273,16 @@ export const VodManager: React.FC<VodManagerProps> = ({ lang, onPlayStream }) =>
       ) : (
         /* Series Tab */
         filteredSeries.length === 0 ? (
-          <div className="text-center py-16 bg-slate-900/40 rounded-2xl border border-slate-800/60">
-            <ListVideo className="w-10 h-10 text-slate-600 mx-auto mb-2" />
-            <p className="text-xs text-slate-400">{lang === 'fr' ? 'Aucune série trouvée.' : 'لم يتم العثور على مسلسلات.'}</p>
+          <div className="text-center py-16 bg-slate-900/40 rounded-2xl border border-slate-800/60 space-y-2">
+            <ListVideo className="w-10 h-10 text-slate-600 mx-auto" />
+            <div className="font-semibold text-white text-xs">
+              {lang === 'fr' ? 'Aucune série dans le catalogue' : 'لا توجد مسلسلات في الكتالوج'}
+            </div>
+            <p className="text-[11px] text-slate-400 max-w-sm mx-auto">
+              {lang === 'fr'
+                ? 'Tous les serveurs démo ont été retirés. Synchronisez votre source Xtream Codes IPTV pour importer vos séries et épisodes.'
+                : 'تمت إزالة السيرفرات الافتراضية. قم بمزامنة اشتراك Xtream Codes لتحميل المسلسلات والحلقات الخاصة بك.'}
+            </p>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">

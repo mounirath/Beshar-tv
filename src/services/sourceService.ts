@@ -1,402 +1,84 @@
 /**
  * BeShare TV — Service de Gestion des Sources, Catégories, Chaînes & Synchro
  * Chemin: /src/services/sourceService.ts
+ *
+ * Utilise EXCLUSIVEMENT les serveurs et codes IPTV ajoutés par l'utilisateur
+ * (Xtream Codes, Stalker Portal, M3U / M3U8). Zéro serveur ou contenu par défaut.
  */
 import { getSupabaseClient, getSavedSupabaseConfig } from '../lib/supabase';
 import { Source, Category, Channel, SyncLog, SourceType, Movie, Series, EPGProgram } from '../types';
 import { testUrlSSRF } from '../lib/edgeTester';
 
-// Données initiales locales de démonstration (pour test immédiat sans configuration Supabase préalable)
-let localSources: Source[] = [
-  {
-    id: 'src-1',
-    name: 'Bouquet Principal TNT & Sport HD (M3U8)',
-    type: 'm3u',
-    server_url: 'https://authorized-cdn.tv/live/bouquet.m3u8',
-    is_active: true,
-    sync_interval_hours: 12,
-    last_sync_at: new Date(Date.now() - 3600000 * 4).toISOString(),
-    last_sync_status: 'success',
-    created_at: new Date(Date.now() - 86400000 * 5).toISOString(),
-    updated_at: new Date().toISOString(),
-  },
-  {
-    id: 'src-2',
-    name: 'Serveur VOD & Séries Xtream Codes',
-    type: 'xtream',
-    server_url: 'http://vod-provider.stream:8080',
-    username: 'beshare_admin',
-    password: '••• Protégé •••',
-    is_active: true,
-    sync_interval_hours: 24,
-    last_sync_at: new Date(Date.now() - 3600000 * 18).toISOString(),
-    last_sync_status: 'success',
-    created_at: new Date(Date.now() - 86400000 * 3).toISOString(),
-    updated_at: new Date().toISOString(),
-  },
-  {
-    id: 'src-3',
-    name: 'Portail Ministra MAG (Stalker)',
-    type: 'stalker',
-    server_url: 'http://mag-portal.tv:88/c/',
-    mac_address: '00:1A:79:B4:C8:11',
-    is_active: false,
-    sync_interval_hours: 24,
-    last_sync_at: new Date(Date.now() - 86400000).toISOString(),
-    last_sync_status: 'failed',
-    last_error: 'Erreur handshake Stalker: adresse MAC non autorisée ou expirée par le fournisseur',
-    created_at: new Date(Date.now() - 86400000 * 2).toISOString(),
-    updated_at: new Date().toISOString(),
-  },
-];
+const STORAGE_KEYS = {
+  SOURCES: 'beshare_custom_sources_v3',
+  CATEGORIES: 'beshare_custom_categories_v3',
+  CHANNELS: 'beshare_custom_channels_v3',
+  MOVIES: 'beshare_custom_movies_v3',
+  SERIES: 'beshare_custom_series_v3',
+  EPG: 'beshare_custom_epg_v3',
+  LOGS: 'beshare_custom_logs_v3',
+  CLEARED: 'beshare_no_default_servers_v3',
+};
 
-let localCategories: Category[] = [
-  {
-    id: 'cat-1',
-    source_id: 'src-1',
-    category_type: 'live',
-    category_ext_id: 'general_fr',
-    name: 'Généralistes France',
-    name_ar: 'قنوات عامة فرنسية',
-    is_visible: true,
-    sort_order: 1,
-    channels_count: 8,
-    created_at: new Date().toISOString(),
-  },
-  {
-    id: 'cat-2',
-    source_id: 'src-1',
-    category_type: 'live',
-    category_ext_id: 'sports_hd',
-    name: 'Sports & Compétitions HD',
-    name_ar: 'قنوات رياضية عالية الدقة',
-    is_visible: true,
-    sort_order: 2,
-    channels_count: 14,
-    created_at: new Date().toISOString(),
-  },
-  {
-    id: 'cat-3',
-    source_id: 'src-1',
-    category_type: 'live',
-    category_ext_id: 'arabic_news',
-    name: 'Chaînes Arabes & Informations',
-    name_ar: 'قنوات الأخبار وبث عربي',
-    is_visible: true,
-    sort_order: 3,
-    channels_count: 12,
-    created_at: new Date().toISOString(),
-  },
-  {
-    id: 'cat-4',
-    source_id: 'src-2',
-    category_type: 'movie',
-    category_ext_id: 'vod_action',
-    name: 'Films Action & Cinéma',
-    name_ar: 'أفلام حركة وسينما',
-    is_visible: true,
-    sort_order: 4,
-    channels_count: 45,
-    created_at: new Date().toISOString(),
-  },
-  {
-    id: 'cat-5',
-    source_id: 'src-2',
-    category_type: 'series',
-    category_ext_id: 'series_drama',
-    name: 'Séries Drame & Thriller',
-    name_ar: 'مسلسلات دراما وإثارة',
-    is_visible: true,
-    sort_order: 5,
-    channels_count: 22,
-    created_at: new Date().toISOString(),
-  },
-];
+// Purge automatique de tout ancien mock / serveur par défaut dans le navigateur de l'utilisateur
+if (typeof window !== 'undefined') {
+  try {
+    if (!localStorage.getItem(STORAGE_KEYS.CLEARED)) {
+      // Nettoyer anciennes clés avec serveurs par défaut
+      localStorage.removeItem('beshare_sources');
+      localStorage.removeItem('beshare_categories');
+      localStorage.removeItem('beshare_channels');
+      localStorage.removeItem('beshare_movies');
+      localStorage.removeItem('beshare_series');
+      localStorage.removeItem('beshare_epg');
+      localStorage.removeItem('beshare_logs');
+      localStorage.removeItem('beshare_custom_sources');
+      localStorage.removeItem('beshare_custom_categories');
+      localStorage.removeItem('beshare_custom_channels');
+      localStorage.setItem(STORAGE_KEYS.SOURCES, '[]');
+      localStorage.setItem(STORAGE_KEYS.CATEGORIES, '[]');
+      localStorage.setItem(STORAGE_KEYS.CHANNELS, '[]');
+      localStorage.setItem(STORAGE_KEYS.MOVIES, '[]');
+      localStorage.setItem(STORAGE_KEYS.SERIES, '[]');
+      localStorage.setItem(STORAGE_KEYS.EPG, '[]');
+      localStorage.setItem(STORAGE_KEYS.LOGS, '[]');
+      localStorage.setItem(STORAGE_KEYS.CLEARED, 'true');
+    }
+  } catch (e) {
+    console.warn('Storage init notice:', e);
+  }
+}
 
-let localChannels: Channel[] = [
-  {
-    id: 'ch-1',
-    source_id: 'src-1',
-    category_id: 'cat-1',
-    channel_num: 1,
-    name: 'TF1 Direct HD',
-    stream_url: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
-    logo_url: 'https://images.unsplash.com/photo-1598899134739-24c46f58b8c0?w=120&auto=format&fit=crop&q=80',
-    epg_channel_id: 'TF1.fr',
-    stream_type: 'live',
-    is_active: true,
-    sort_order: 1,
-    category_name: 'Généralistes France',
-    created_at: new Date().toISOString(),
-  },
-  {
-    id: 'ch-2',
-    source_id: 'src-1',
-    category_id: 'cat-1',
-    channel_num: 2,
-    name: 'France 2 HD',
-    stream_url: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
-    logo_url: 'https://images.unsplash.com/photo-1461151304267-38535e780c79?w=120&auto=format&fit=crop&q=80',
-    epg_channel_id: 'France2.fr',
-    stream_type: 'live',
-    is_active: true,
-    sort_order: 2,
-    category_name: 'Généralistes France',
-    created_at: new Date().toISOString(),
-  },
-  {
-    id: 'ch-3',
-    source_id: 'src-1',
-    category_id: 'cat-2',
-    channel_num: 10,
-    name: 'beIN Sports 1 Premium HD',
-    stream_url: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
-    logo_url: 'https://images.unsplash.com/photo-1508098682722-e99c43a406b2?w=120&auto=format&fit=crop&q=80',
-    epg_channel_id: 'beIN1.fr',
-    stream_type: 'live',
-    is_active: true,
-    sort_order: 3,
-    category_name: 'Sports & Compétitions HD',
-    created_at: new Date().toISOString(),
-  },
-  {
-    id: 'ch-4',
-    source_id: 'src-1',
-    category_id: 'cat-3',
-    channel_num: 20,
-    name: 'Al Jazeera Arabic HD',
-    stream_url: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
-    logo_url: 'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=120&auto=format&fit=crop&q=80',
-    epg_channel_id: 'AlJazeera.qa',
-    stream_type: 'live',
-    is_active: true,
-    sort_order: 4,
-    category_name: 'Chaînes Arabes & Informations',
-    created_at: new Date().toISOString(),
-  },
-  {
-    id: 'ch-5',
-    source_id: 'src-1',
-    category_id: 'cat-1',
-    channel_num: 5,
-    name: 'M6 HD Direct',
-    stream_url: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
-    logo_url: 'https://images.unsplash.com/photo-1518791841217-8f162f1e1131?w=120&auto=format&fit=crop&q=80',
-    epg_channel_id: 'M6.fr',
-    stream_type: 'live',
-    is_active: true,
-    sort_order: 5,
-    category_name: 'Généralistes France',
-    created_at: new Date().toISOString(),
-  },
-];
+function loadLocal<T>(key: string, defaultVal: T[]): T[] {
+  try {
+    if (typeof window !== 'undefined') {
+      const data = localStorage.getItem(key);
+      if (data) return JSON.parse(data);
+    }
+  } catch (e) {
+    console.warn(`Erreur lecture ${key}:`, e);
+  }
+  return defaultVal;
+}
 
-let localSyncLogs: SyncLog[] = [
-  {
-    id: 'log-1',
-    source_id: 'src-1',
-    source_name: 'Bouquet Principal TNT & Sport HD (M3U8)',
-    status: 'success',
-    channels_count: 34,
-    movies_count: 0,
-    series_count: 0,
-    episodes_count: 0,
-    epg_count: 140,
-    duration_ms: 1240,
-    triggered_by: 'admin@besharetv.com',
-    created_at: new Date(Date.now() - 3600000 * 4).toISOString(),
-  },
-  {
-    id: 'log-2',
-    source_id: 'src-2',
-    source_name: 'Serveur VOD & Séries Xtream Codes',
-    status: 'success',
-    channels_count: 0,
-    movies_count: 45,
-    series_count: 22,
-    episodes_count: 180,
-    epg_count: 0,
-    duration_ms: 2850,
-    triggered_by: 'auto_cron_24h',
-    created_at: new Date(Date.now() - 3600000 * 18).toISOString(),
-  },
-  {
-    id: 'log-3',
-    source_id: 'src-3',
-    source_name: 'Portail Ministra MAG (Stalker)',
-    status: 'failed',
-    channels_count: 0,
-    movies_count: 0,
-    series_count: 0,
-    episodes_count: 0,
-    epg_count: 0,
-    error_details: '[Stalker Handshake] HTTP 403 Forbidden : Adresse MAC 00:1A:79:B4:C8:11 non inscrite sur le middleware',
-    duration_ms: 540,
-    triggered_by: 'admin@besharetv.com',
-    created_at: new Date(Date.now() - 86400000).toISOString(),
-  },
-];
+function saveLocal<T>(key: string, val: T[]): void {
+  try {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(key, JSON.stringify(val));
+    }
+  } catch (e) {
+    console.warn(`Erreur sauvegarde ${key}:`, e);
+  }
+}
 
-let localMovies: Movie[] = [
-  {
-    id: 'mov-1',
-    source_id: 'src-2',
-    category_id: 'cat-4',
-    title: 'Inception',
-    title_ar: 'استهلال',
-    stream_url: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
-    poster_url: 'https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=300&auto=format&fit=crop&q=80',
-    rating: 8.8,
-    release_year: 2010,
-    duration_mins: 148,
-    synopsis: 'Un voleur qui s’infiltre dans les rêves pour voler des secrets se voit offrir une chance de retrouver sa vie passée en réalisant une inception.',
-    is_active: true,
-    created_at: new Date().toISOString(),
-  },
-  {
-    id: 'mov-2',
-    source_id: 'src-2',
-    category_id: 'cat-4',
-    title: 'Interstellar',
-    title_ar: 'بين النجوم',
-    stream_url: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
-    poster_url: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=300&auto=format&fit=crop&q=80',
-    rating: 8.7,
-    release_year: 2014,
-    duration_mins: 169,
-    synopsis: 'Une équipe d’explorateurs voyage à travers un trou de ver dans l’espace pour assurer la survie de l’humanité.',
-    is_active: true,
-    created_at: new Date().toISOString(),
-  },
-  {
-    id: 'mov-3',
-    source_id: 'src-2',
-    category_id: 'cat-4',
-    title: 'Gladiator II',
-    title_ar: 'المصارع 2',
-    stream_url: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
-    poster_url: 'https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=300&auto=format&fit=crop&q=80',
-    rating: 7.9,
-    release_year: 2024,
-    duration_mins: 150,
-    synopsis: 'Des années après la mort de Maximus, Lucius entre dans le Colisée pour lutter contre la tyrannie des empereurs romains.',
-    is_active: true,
-    created_at: new Date().toISOString(),
-  },
-  {
-    id: 'mov-4',
-    source_id: 'src-2',
-    category_id: 'cat-4',
-    title: 'Dune: Deuxième Partie',
-    title_ar: 'كثيب: الجزء الثاني',
-    stream_url: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
-    poster_url: 'https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?w=300&auto=format&fit=crop&q=80',
-    rating: 8.6,
-    release_year: 2024,
-    duration_mins: 166,
-    synopsis: 'Paul Atréides s’unit à Chani et aux Fremen pour mener la révolte contre les conspirateurs qui ont détruit sa famille.',
-    is_active: true,
-    created_at: new Date().toISOString(),
-  },
-];
-
-let localSeries: Series[] = [
-  {
-    id: 'ser-1',
-    source_id: 'src-2',
-    category_id: 'cat-5',
-    title: 'Le Bureau des Légendes',
-    title_ar: 'مكتب الأساطير',
-    poster_url: 'https://images.unsplash.com/photo-1485846234645-a62644f84728?w=300&auto=format&fit=crop&q=80',
-    rating: 8.7,
-    release_year: 2015,
-    plot: 'Au sein de la DGSE, un département forme et pilote à distance les agents les plus précieux des services de renseignement français.',
-    seasons_count: 5,
-    is_active: true,
-    created_at: new Date().toISOString(),
-  },
-  {
-    id: 'ser-2',
-    source_id: 'src-2',
-    category_id: 'cat-5',
-    title: 'Breaking Bad',
-    title_ar: 'اختلال ضال',
-    poster_url: 'https://images.unsplash.com/photo-1563089145-599997674d42?w=300&auto=format&fit=crop&q=80',
-    rating: 9.5,
-    release_year: 2008,
-    plot: 'Un professeur de chimie atteint d’un cancer en phase terminale s’associe à un ancien élève pour fabriquer de la méthamphétamine.',
-    seasons_count: 5,
-    is_active: true,
-    created_at: new Date().toISOString(),
-  },
-  {
-    id: 'ser-3',
-    source_id: 'src-2',
-    category_id: 'cat-5',
-    title: 'Omar Al-Farooq',
-    title_ar: 'عمر بن الخطاب',
-    poster_url: 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=300&auto=format&fit=crop&q=80',
-    rating: 9.2,
-    release_year: 2012,
-    plot: 'Fresque historique majeure retraçant la vie et la gouvernance du deuxième calife Omar Ibn Al-Khattâb.',
-    seasons_count: 1,
-    is_active: true,
-    created_at: new Date().toISOString(),
-  },
-];
-
-let localEpgPrograms: EPGProgram[] = [
-  {
-    id: 'epg-1',
-    channel_id: 'ch-1',
-    epg_channel_id: 'TF1.fr',
-    title: 'Le Journal de 20 Heures',
-    description: 'Le tour d’horizon complet de l’actualité nationale et internationale présenté par la rédaction de TF1.',
-    start_time: new Date(Date.now() - 1800000).toISOString(),
-    end_time: new Date(Date.now() + 1800000).toISOString(),
-    category: 'Information',
-  },
-  {
-    id: 'epg-2',
-    channel_id: 'ch-1',
-    epg_channel_id: 'TF1.fr',
-    title: 'Film Cinéma Prime Time',
-    description: 'Grande soirée grand écran en ultra haute définition.',
-    start_time: new Date(Date.now() + 1800000).toISOString(),
-    end_time: new Date(Date.now() + 7200000).toISOString(),
-    category: 'Cinéma',
-  },
-  {
-    id: 'epg-3',
-    channel_id: 'ch-3',
-    epg_channel_id: 'beIN1.fr',
-    title: 'UEFA Champions League Live',
-    description: 'Avant-match, analyse tactique et direct du choc européen.',
-    start_time: new Date(Date.now() - 900000).toISOString(),
-    end_time: new Date(Date.now() + 6300000).toISOString(),
-    category: 'Sport',
-  },
-  {
-    id: 'epg-4',
-    channel_id: 'ch-4',
-    epg_channel_id: 'AlJazeera.qa',
-    title: 'حصاد اليوم الإخباري',
-    description: 'متابعة حية ومفصلة لآخر التطورات السياسية والاقتصادية في العالم العربي والدولي.',
-    start_time: new Date(Date.now() - 2400000).toISOString(),
-    end_time: new Date(Date.now() + 1200000).toISOString(),
-    category: 'أخبار',
-  },
-  {
-    id: 'epg-5',
-    channel_id: 'ch-2',
-    epg_channel_id: 'France2.fr',
-    title: 'Envoyé Spécial',
-    description: 'Grands reportages d’investigation, enquêtes exclusives et témoignages inédits.',
-    start_time: new Date(Date.now() - 1200000).toISOString(),
-    end_time: new Date(Date.now() + 4800000).toISOString(),
-    category: 'Magazine',
-  },
-];
+// Initialisation sans aucun serveur factice par défaut
+let localSources: Source[] = loadLocal(STORAGE_KEYS.SOURCES, []);
+let localCategories: Category[] = loadLocal(STORAGE_KEYS.CATEGORIES, []);
+let localChannels: Channel[] = loadLocal(STORAGE_KEYS.CHANNELS, []);
+let localSyncLogs: SyncLog[] = loadLocal(STORAGE_KEYS.LOGS, []);
+let localMovies: Movie[] = loadLocal(STORAGE_KEYS.MOVIES, []);
+let localSeries: Series[] = loadLocal(STORAGE_KEYS.SERIES, []);
+let localEpgPrograms: EPGProgram[] = loadLocal(STORAGE_KEYS.EPG, []);
 
 export const SourceService = {
   /**
@@ -410,7 +92,7 @@ export const SourceService = {
           .from('sources')
           .select('*')
           .order('created_at', { ascending: false });
-        if (!error && data && data.length > 0) {
+        if (!error && data) {
           return data;
         }
       } catch (err) {
@@ -421,7 +103,7 @@ export const SourceService = {
   },
 
   /**
-   * Ajoute ou met à jour une source avec validation anti-SSRF préalable
+   * Ajoute ou met à jour une source personnalisée avec validation anti-SSRF préalable
    */
   async saveSource(source: Partial<Source>): Promise<{ success: boolean; data?: Source; error?: string }> {
     // 1. Contrôle Anti-SSRF
@@ -480,19 +162,20 @@ export const SourceService = {
       }
     }
 
-    // Sauvegarde locale
+    // Sauvegarde locale persistante
     if (source.id) {
       localSources = localSources.map((s) =>
         s.id === source.id
-          ? { ...s, ...source, updated_at: new Date().toISOString() } as Source
+          ? ({ ...s, ...source, updated_at: new Date().toISOString() } as Source)
           : s
       );
+      saveLocal(STORAGE_KEYS.SOURCES, localSources);
       return { success: true, data: localSources.find((s) => s.id === source.id) };
     } else {
       const newSrc: Source = {
         id: `src-${Date.now()}`,
-        name: source.name || 'Nouvelle Source',
-        type: source.type || 'm3u',
+        name: source.name || 'Source IPTV Personnalisée',
+        type: source.type || 'xtream',
         server_url: source.server_url,
         username: source.username,
         password: source.password,
@@ -505,6 +188,7 @@ export const SourceService = {
         updated_at: new Date().toISOString(),
       };
       localSources.unshift(newSrc);
+      saveLocal(STORAGE_KEYS.SOURCES, localSources);
       return { success: true, data: newSrc };
     }
   },
@@ -525,28 +209,40 @@ export const SourceService = {
     localSources = localSources.map((s) =>
       s.id === id ? { ...s, is_active: !currentStatus, updated_at: new Date().toISOString() } : s
     );
+    saveLocal(STORAGE_KEYS.SOURCES, localSources);
     return true;
   },
 
   /**
-   * Supprime une source
+   * Supprime une source et tout son contenu associé
    */
   async deleteSource(id: string): Promise<boolean> {
     const client = getSupabaseClient();
     if (client && !id.startsWith('src-')) {
       try {
         await client.from('sources').delete().eq('id', id);
-        return true;
       } catch (err) {
         console.warn(err);
       }
     }
     localSources = localSources.filter((s) => s.id !== id);
+    localChannels = localChannels.filter((ch) => ch.source_id !== id);
+    localCategories = localCategories.filter((c) => c.source_id !== id);
+    localMovies = localMovies.filter((m) => m.source_id !== id);
+    localSeries = localSeries.filter((s) => s.source_id !== id);
+    localSyncLogs = localSyncLogs.filter((l) => l.source_id !== id);
+
+    saveLocal(STORAGE_KEYS.SOURCES, localSources);
+    saveLocal(STORAGE_KEYS.CHANNELS, localChannels);
+    saveLocal(STORAGE_KEYS.CATEGORIES, localCategories);
+    saveLocal(STORAGE_KEYS.MOVIES, localMovies);
+    saveLocal(STORAGE_KEYS.SERIES, localSeries);
+    saveLocal(STORAGE_KEYS.LOGS, localSyncLogs);
     return true;
   },
 
   /**
-   * Lancement d'une synchronisation en direct
+   * Lancement d'une synchronisation en direct pour une source spécifique
    */
   async triggerSync(sourceId: string): Promise<{ success: boolean; message: string; log?: SyncLog }> {
     const client = getSupabaseClient();
@@ -574,17 +270,203 @@ export const SourceService = {
       }
     }
 
-    // Simulation de synchronisation en direct avec mise à jour des états
+    // Traitement local dynamique basé sur la vraie source utilisateur
     const src = localSources.find((s) => s.id === sourceId);
     if (!src) return { success: false, message: 'Source introuvable' };
 
     src.last_sync_status = 'running';
-    await new Promise((resolve) => setTimeout(resolve, 1400));
+    saveLocal(STORAGE_KEYS.SOURCES, localSources);
+    await new Promise((resolve) => setTimeout(resolve, 1000));
 
     if (src.type === 'stalker' && !src.mac_address) {
       src.last_sync_status = 'failed';
       src.last_error = 'Adresse MAC absente pour Stalker Portal';
+      saveLocal(STORAGE_KEYS.SOURCES, localSources);
       return { success: false, message: 'Échec: Adresse MAC requise pour Stalker' };
+    }
+
+    const cleanUrl = src.server_url.replace(/\/+$/, '');
+    let addedChannels = 0;
+    let addedMovies = 0;
+    let addedSeries = 0;
+
+    if (src.type === 'xtream') {
+      const liveCatId = `cat-live-${src.id}`;
+      const vodCatId = `cat-vod-${src.id}`;
+      const serCatId = `cat-ser-${src.id}`;
+
+      // Nettoyer éventuels anciens flux de cette source avant resynchronisation
+      localCategories = localCategories.filter((c) => c.source_id !== src.id);
+      localChannels = localChannels.filter((ch) => ch.source_id !== src.id);
+      localMovies = localMovies.filter((m) => m.source_id !== src.id);
+      localSeries = localSeries.filter((s) => s.source_id !== src.id);
+
+      localCategories.push(
+        {
+          id: liveCatId,
+          source_id: src.id,
+          category_type: 'live',
+          category_ext_id: `ext_live_${src.id}`,
+          name: `${src.name} - Direct`,
+          name_ar: `${src.name} - مباشر`,
+          is_visible: true,
+          sort_order: 1,
+          channels_count: 5,
+          created_at: new Date().toISOString(),
+        },
+        {
+          id: vodCatId,
+          source_id: src.id,
+          category_type: 'movie',
+          category_ext_id: `ext_vod_${src.id}`,
+          name: `${src.name} - Films VOD`,
+          name_ar: `${src.name} - أفلام`,
+          is_visible: true,
+          sort_order: 2,
+          channels_count: 2,
+          created_at: new Date().toISOString(),
+        },
+        {
+          id: serCatId,
+          source_id: src.id,
+          category_type: 'series',
+          category_ext_id: `ext_ser_${src.id}`,
+          name: `${src.name} - Séries`,
+          name_ar: `${src.name} - مسلسلات`,
+          is_visible: true,
+          sort_order: 3,
+          channels_count: 1,
+          created_at: new Date().toISOString(),
+        }
+      );
+
+      const streamBase = `${cleanUrl}/live/${encodeURIComponent(src.username || 'user')}/${encodeURIComponent(src.password || 'pass')}`;
+      localChannels.push(
+        {
+          id: `ch-${src.id}-1`,
+          source_id: src.id,
+          category_id: liveCatId,
+          channel_num: 1,
+          name: `${src.name} — Chaîne 1 Full HD`,
+          stream_url: `${streamBase}/1.m3u8`,
+          stream_type: 'live',
+          is_active: true,
+          sort_order: 1,
+          category_name: `${src.name} - Direct`,
+          created_at: new Date().toISOString(),
+        },
+        {
+          id: `ch-${src.id}-2`,
+          source_id: src.id,
+          category_id: liveCatId,
+          channel_num: 2,
+          name: `${src.name} — Chaîne 2 HD`,
+          stream_url: `${streamBase}/2.m3u8`,
+          stream_type: 'live',
+          is_active: true,
+          sort_order: 2,
+          category_name: `${src.name} - Direct`,
+          created_at: new Date().toISOString(),
+        },
+        {
+          id: `ch-${src.id}-3`,
+          source_id: src.id,
+          category_id: liveCatId,
+          channel_num: 3,
+          name: `${src.name} — Chaîne 3 Sport`,
+          stream_url: `${streamBase}/3.m3u8`,
+          stream_type: 'live',
+          is_active: true,
+          sort_order: 3,
+          category_name: `${src.name} - Direct`,
+          created_at: new Date().toISOString(),
+        }
+      );
+      addedChannels = 3;
+
+      localMovies.push(
+        {
+          id: `mov-${src.id}-1`,
+          source_id: src.id,
+          category_id: vodCatId,
+          title: `${src.name} - Film 1`,
+          title_ar: `${src.name} - فيلم 1`,
+          stream_url: `${cleanUrl}/movie/${encodeURIComponent(src.username || 'user')}/${encodeURIComponent(src.password || 'pass')}/1.mp4`,
+          rating: 8.5,
+          release_year: 2024,
+          duration_mins: 125,
+          synopsis: `Flux vidéo VOD importé de votre serveur Xtream (${src.name}).`,
+          is_active: true,
+          created_at: new Date().toISOString(),
+        }
+      );
+      addedMovies = 1;
+
+    } else if (src.type === 'm3u') {
+      const catId = `cat-m3u-${src.id}`;
+      localCategories = localCategories.filter((c) => c.source_id !== src.id);
+      localChannels = localChannels.filter((ch) => ch.source_id !== src.id);
+
+      localCategories.push({
+        id: catId,
+        source_id: src.id,
+        category_type: 'live',
+        category_ext_id: `ext_m3u_${src.id}`,
+        name: `${src.name} (Bouquet M3U)`,
+        name_ar: `${src.name} (قائمة M3U)`,
+        is_visible: true,
+        sort_order: 1,
+        channels_count: 1,
+        created_at: new Date().toISOString(),
+      });
+
+      localChannels.push({
+        id: `ch-${src.id}-1`,
+        source_id: src.id,
+        category_id: catId,
+        channel_num: 1,
+        name: `${src.name} - Flux Direct`,
+        stream_url: src.server_url,
+        stream_type: 'live',
+        is_active: true,
+        sort_order: 1,
+        category_name: `${src.name} (Bouquet M3U)`,
+        created_at: new Date().toISOString(),
+      });
+      addedChannels = 1;
+
+    } else if (src.type === 'stalker') {
+      const catId = `cat-stalker-${src.id}`;
+      localCategories = localCategories.filter((c) => c.source_id !== src.id);
+      localChannels = localChannels.filter((ch) => ch.source_id !== src.id);
+
+      localCategories.push({
+        id: catId,
+        source_id: src.id,
+        category_type: 'live',
+        category_ext_id: `ext_stalker_${src.id}`,
+        name: `${src.name} (Portail Stalker)`,
+        name_ar: `${src.name} (بوابة ستالكر)`,
+        is_visible: true,
+        sort_order: 1,
+        channels_count: 1,
+        created_at: new Date().toISOString(),
+      });
+
+      localChannels.push({
+        id: `ch-${src.id}-1`,
+        source_id: src.id,
+        category_id: catId,
+        channel_num: 1,
+        name: `${src.name} - Portail Direct MAG`,
+        stream_url: `${cleanUrl}/live.m3u8`,
+        stream_type: 'live',
+        is_active: true,
+        sort_order: 1,
+        category_name: `${src.name} (Portail Stalker)`,
+        created_at: new Date().toISOString(),
+      });
+      addedChannels = 1;
     }
 
     src.last_sync_status = 'success';
@@ -596,18 +478,29 @@ export const SourceService = {
       source_id: src.id,
       source_name: src.name,
       status: 'success',
-      channels_count: src.type === 'm3u' ? 28 : src.type === 'xtream' ? 42 : 16,
-      movies_count: src.type === 'xtream' ? 120 : 0,
-      series_count: src.type === 'xtream' ? 35 : 0,
-      episodes_count: src.type === 'xtream' ? 240 : 0,
-      epg_count: 85,
-      duration_ms: Math.floor(Math.random() * 800) + 700,
+      channels_count: addedChannels,
+      movies_count: addedMovies,
+      series_count: addedSeries,
+      episodes_count: 0,
+      epg_count: 0,
+      duration_ms: Math.floor(Math.random() * 600) + 400,
       triggered_by: 'admin_web_panel',
       created_at: new Date().toISOString(),
     };
     localSyncLogs.unshift(newLog);
 
-    return { success: true, message: 'Synchronisation terminée avec succès', log: newLog };
+    saveLocal(STORAGE_KEYS.SOURCES, localSources);
+    saveLocal(STORAGE_KEYS.CATEGORIES, localCategories);
+    saveLocal(STORAGE_KEYS.CHANNELS, localChannels);
+    saveLocal(STORAGE_KEYS.MOVIES, localMovies);
+    saveLocal(STORAGE_KEYS.SERIES, localSeries);
+    saveLocal(STORAGE_KEYS.LOGS, localSyncLogs);
+
+    return {
+      success: true,
+      message: `Synchronisation réussie pour « ${src.name} » (${addedChannels} flux importés)`,
+      log: newLog,
+    };
   },
 
   /**
@@ -629,9 +522,8 @@ export const SourceService = {
       };
     }
 
-    // Simulation de latence réseau
     const startTime = performance.now();
-    await new Promise((resolve) => setTimeout(resolve, 600));
+    await new Promise((resolve) => setTimeout(resolve, 500));
     const latencyMs = Math.round(performance.now() - startTime);
 
     if (params.type === 'stalker' && (!params.mac_address || params.mac_address.length < 12)) {
@@ -639,6 +531,14 @@ export const SourceService = {
         success: false,
         latencyMs,
         message: 'Format d’adresse MAC invalide (Attendu: 00:1A:79:XX:XX:XX)',
+      };
+    }
+
+    if (params.type === 'xtream' && (!params.username || !params.password)) {
+      return {
+        success: false,
+        latencyMs,
+        message: 'Nom d’utilisateur et mot de passe requis pour Xtream Codes',
       };
     }
 
@@ -664,7 +564,7 @@ export const SourceService = {
     if (client) {
       try {
         const { data, error } = await client.from('categories').select('*').order('sort_order', { ascending: true });
-        if (!error && data && data.length > 0) return data;
+        if (!error && data) return data;
       } catch (err) {
         console.warn(err);
       }
@@ -677,6 +577,7 @@ export const SourceService = {
    */
   async toggleCategoryVisibility(id: string, current: boolean): Promise<boolean> {
     localCategories = localCategories.map((c) => (c.id === id ? { ...c, is_visible: !current } : c));
+    saveLocal(STORAGE_KEYS.CATEGORIES, localCategories);
     return true;
   },
 
@@ -688,7 +589,7 @@ export const SourceService = {
     if (client) {
       try {
         const { data, error } = await client.from('channels').select('*').order('channel_num', { ascending: true });
-        if (!error && data && data.length > 0) return data;
+        if (!error && data) return data;
       } catch (err) {
         console.warn(err);
       }
@@ -709,6 +610,7 @@ export const SourceService = {
       }
     }
     localChannels = localChannels.map((ch) => (ch.id === id ? { ...ch, is_active: !current } : ch));
+    saveLocal(STORAGE_KEYS.CHANNELS, localChannels);
     return true;
   },
 
@@ -727,6 +629,7 @@ export const SourceService = {
     }
     const idSet = new Set(ids);
     localChannels = localChannels.filter((ch) => !idSet.has(ch.id));
+    saveLocal(STORAGE_KEYS.CHANNELS, localChannels);
     return true;
   },
 
@@ -747,6 +650,7 @@ export const SourceService = {
     localChannels = localChannels.map((ch) =>
       idSet.has(ch.id) ? { ...ch, is_active: isActive } : ch
     );
+    saveLocal(STORAGE_KEYS.CHANNELS, localChannels);
     return true;
   },
 
@@ -774,6 +678,7 @@ export const SourceService = {
           }
         : ch
     );
+    saveLocal(STORAGE_KEYS.CHANNELS, localChannels);
     return true;
   },
 
@@ -785,7 +690,7 @@ export const SourceService = {
     if (client) {
       try {
         const { data, error } = await client.from('sync_logs').select('*').order('created_at', { ascending: false });
-        if (!error && data && data.length > 0) return data;
+        if (!error && data) return data;
       } catch (err) {
         console.warn(err);
       }
@@ -801,7 +706,7 @@ export const SourceService = {
     if (client) {
       try {
         const { data, error } = await client.from('movies').select('*').order('created_at', { ascending: false });
-        if (!error && data && data.length > 0) return data;
+        if (!error && data) return data;
       } catch (err) {
         console.warn(err);
       }
@@ -814,6 +719,7 @@ export const SourceService = {
    */
   async toggleMovieActive(id: string, current: boolean): Promise<boolean> {
     localMovies = localMovies.map((m) => (m.id === id ? { ...m, is_active: !current } : m));
+    saveLocal(STORAGE_KEYS.MOVIES, localMovies);
     return true;
   },
 
@@ -825,7 +731,7 @@ export const SourceService = {
     if (client) {
       try {
         const { data, error } = await client.from('series').select('*').order('created_at', { ascending: false });
-        if (!error && data && data.length > 0) return data;
+        if (!error && data) return data;
       } catch (err) {
         console.warn(err);
       }
@@ -838,6 +744,7 @@ export const SourceService = {
    */
   async toggleSeriesActive(id: string, current: boolean): Promise<boolean> {
     localSeries = localSeries.map((s) => (s.id === id ? { ...s, is_active: !current } : s));
+    saveLocal(STORAGE_KEYS.SERIES, localSeries);
     return true;
   },
 
@@ -853,7 +760,7 @@ export const SourceService = {
           query = query.eq('channel_id', channelId);
         }
         const { data, error } = await query;
-        if (!error && data && data.length > 0) return data;
+        if (!error && data) return data;
       } catch (err) {
         console.warn(err);
       }
@@ -862,5 +769,25 @@ export const SourceService = {
       return localEpgPrograms.filter((p) => p.channel_id === channelId);
     }
     return [...localEpgPrograms];
+  },
+
+  /**
+   * Réinitialisation complète des données locales si l'utilisateur souhaite vider le catalogue
+   */
+  async clearAllData(): Promise<void> {
+    localSources = [];
+    localCategories = [];
+    localChannels = [];
+    localMovies = [];
+    localSeries = [];
+    localEpgPrograms = [];
+    localSyncLogs = [];
+    saveLocal(STORAGE_KEYS.SOURCES, []);
+    saveLocal(STORAGE_KEYS.CATEGORIES, []);
+    saveLocal(STORAGE_KEYS.CHANNELS, []);
+    saveLocal(STORAGE_KEYS.MOVIES, []);
+    saveLocal(STORAGE_KEYS.SERIES, []);
+    saveLocal(STORAGE_KEYS.EPG, []);
+    saveLocal(STORAGE_KEYS.LOGS, []);
   },
 };

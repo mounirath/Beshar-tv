@@ -97,8 +97,21 @@ export const CategoryManager: React.FC<CategoryManagerProps> = ({
       </div>
 
       {/* Categories Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-        {filtered.map((cat) => (
+      {filtered.length === 0 ? (
+        <div className="text-center py-12 bg-slate-950/60 rounded-xl border border-slate-800 space-y-2">
+          <Layers className="w-8 h-8 text-slate-600 mx-auto" />
+          <div className="font-semibold text-white text-xs">
+            {lang === 'fr' ? 'Aucune catégorie disponible' : 'لا توجد تصنيفات حالياً'}
+          </div>
+          <p className="text-[11px] text-slate-400 max-w-sm mx-auto">
+            {lang === 'fr'
+              ? 'Ajoutez votre source Xtream Codes ou M3U pour créer et organiser automatiquement vos catégories TV et VOD.'
+              : 'قم بإضافة اشتراك Xtream Codes أو M3U لإنشاء وتنظيم باقات القنوات والأفلام تلقائياً.'}
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          {filtered.map((cat) => (
           <div
             key={cat.id}
             className={`p-3.5 rounded-xl border transition-all flex items-center justify-between ${
@@ -151,7 +164,8 @@ export const CategoryManager: React.FC<CategoryManagerProps> = ({
             </button>
           </div>
         ))}
-      </div>
+        </div>
+      )}
     </div>
   );
 };

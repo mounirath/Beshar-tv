@@ -13,6 +13,7 @@ interface SourceModalProps {
   onClose: () => void;
   onSaved: () => void;
   sourceToEdit?: Source | null;
+  defaultType?: SourceType;
   lang: 'fr' | 'ar';
 }
 
@@ -21,10 +22,11 @@ export const SourceModal: React.FC<SourceModalProps> = ({
   onClose,
   onSaved,
   sourceToEdit,
+  defaultType = 'xtream',
   lang,
 }) => {
   const [name, setName] = useState('');
-  const [type, setType] = useState<SourceType>('m3u');
+  const [type, setType] = useState<SourceType>(defaultType);
   const [serverUrl, setServerUrl] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -58,7 +60,7 @@ export const SourceModal: React.FC<SourceModalProps> = ({
       setIsActive(sourceToEdit.is_active);
     } else {
       setName('');
-      setType('m3u');
+      setType(defaultType || 'xtream');
       setServerUrl('');
       setUsername('');
       setPassword('');
