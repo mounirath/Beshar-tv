@@ -64,3 +64,60 @@ WHERE email = 'votre-email@besharetv.com';
 | `epg_programs` | ❌ Bloqué | ✅ Lecture | ❌ Bloqué | ✅ Gestion totale |
 | `client_devices` | ❌ Bloqué | ✅ CRUD (propres appareils) | ❌ Bloqué | ✅ Gestion globale |
 | `user_favorites` | ❌ Bloqué | ✅ CRUD (propres favoris) | ❌ Bloqué | ✅ Gestion globale |
+
+---
+
+## 5. Étape 2 : Déploiement des Edge Functions & Moteur de Synchronisation
+
+Les Edge Functions sont situées dans `/supabase/functions/` et intègrent le moteur de parsing et d'assainissement :
+
+### Structure des modules :
+- **`/supabase/functions/_shared/ssrf.ts`** :
+  - Bloque les IPs privées (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16)
+  - Bloque les boucles locales (127.0.0.0/8, ::1, localhost)
+  - Bloque les métadonnées Cloud (169.254.169.254, metadata.google.internal)
+  - Bloque les ports sensibles (22, 25, 3306, 5432, 6379, etc.)
+  - Timeout d'annulation automatique et limitation de taille (40 Mo max anti-DoS).
+- **`/supabase/functions/_shared/sanitizer.ts`** :
+  - Caviarde automatiquement les mots de passe, tokens et clés secrètes avant toute insertion dans `sync_logs` ou affichage console.
+- **`/supabase/functions/_shared/m3u_parser.ts`** :
+  - Parseur en streaming pour flux M3U/M3U8 avec classification automatique (Live TV, Films VOD, Séries).
+- **`/supabase/functions/_shared/xtream_client.ts`** :
+  - Client API v2 Xtream Codes avec négociation `player_api.php` et construction d'URLs sécurisées.
+- **`/supabase/functions/_shared/stalker_client.ts`** :
+  - Client Stalker Portal (Ministra) avec Handshake MAC et résolution de liens de lecture.
+- **`/supabase/functions/sync-source/index.ts`** :
+  - Edge Function principale effectuant la synchronisation complète et les écritures par lots dans PostgreSQL.
+- **`/supabase/functions/test-source/index.ts`** :
+  - Edge Function de diagnostic pour tester une source avant enregistrement.
+
+### Déploiement via Supabase CLI :
+```bash
+# Déploiement des fonctions Edge
+supabase functions deploy sync-source --no-verify-jwt=false
+supabase functions deploy test-source --no-verify-jwt=false
+
+# Définition des variables secrètes sur Supabase
+supabase secrets set SUPABASE_SERVICE_ROLE_KEY="votre-cle-service-role"
+```
+
+### Automatisation de la synchronisation (Optionnel avec pg_cron dans Supabase SQL) :
+```sql
+-- Planifier une synchronisation automatique toutes les 24 heures pour les sources actives
+SELECT cron.schedule(
+    'beshare-auto-sync-sources',
+    '0 3 * * *', -- Tous les jours à 03h00 du matin
+    $$
+    SELECT net.http_post(
+        url := 'https://VOTRE_PROJECT_REF.supabase.co/functions/v1/sync-source',
+        headers := jsonb_build_object(
+            'Content-Type', 'application/json',
+            'Authorization', 'Bearer ' || current_setting('app.settings.service_role_key', true)
+        ),
+        body := jsonb_build_object('source_id', id)
+    )
+    FROM public.sources
+    WHERE is_active = true;
+    $$
+);
+```
