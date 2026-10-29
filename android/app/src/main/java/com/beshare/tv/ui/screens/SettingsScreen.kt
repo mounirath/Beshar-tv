@@ -38,6 +38,7 @@ fun SettingsScreen(
     val deviceId: String = remember(context) { ApiClient.getOrCreateDeviceId(context) }
     val isDemoMode by viewModel.isDemoMode.collectAsState()
     var showServerDialog by remember { mutableStateOf(false) }
+    var bufferMode by remember { mutableStateOf("standard") }
 
     if (showServerDialog) {
         ServerConfigDialog(

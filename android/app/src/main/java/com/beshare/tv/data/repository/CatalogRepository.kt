@@ -18,12 +18,21 @@ class CatalogRepository(private val context: Context) {
         if (ApiClient.isDemoMode(context)) {
             return@withContext Result.success(
                 HandshakeResponse(
-                    allowed = true,
-                    deviceId = ApiClient.getDeviceId(context),
-                    activeSessions = 1,
-                    maxConcurrentDevices = 2,
-                    sessionToken = "demo-session-token",
-                    message = "Mode Démonstration Actif"
+                    success = true,
+                    message = "Mode Démonstration Actif",
+                    error = null,
+                    user = UserInfo(
+                        id = "demo-user",
+                        email = "demo@beshare.tv",
+                        role = "subscriber",
+                        expiresAt = "2099-12-31T23:59:59Z",
+                        maxDevices = 2
+                    ),
+                    device = DeviceInfo(
+                        deviceId = ApiClient.getDeviceId(context),
+                        deviceType = "android_tv",
+                        status = "active"
+                    )
                 )
             )
         }
@@ -72,7 +81,15 @@ class CatalogRepository(private val context: Context) {
     suspend fun getChannels(categoryId: String?, page: Int = 1): Result<ChannelsResponse> = withContext(Dispatchers.IO) {
         if (ApiClient.isDemoMode(context)) {
             val demoList = getDemoChannels().filter { categoryId == null || it.categoryId == categoryId }
-            return@withContext Result.success(ChannelsResponse(channels = demoList, total = demoList.size, page = 1))
+            return@withContext Result.success(
+                ChannelsResponse(
+                    channels = demoList,
+                    page = 1,
+                    limit = demoList.size,
+                    total = demoList.size,
+                    hasMore = false
+                )
+            )
         }
 
         try {
@@ -85,7 +102,15 @@ class CatalogRepository(private val context: Context) {
         } catch (e: Exception) {
             if (ApiClient.isPlaceholderUrl(context) || (e.message?.contains("your_project_id") == true)) {
                 val demoList = getDemoChannels().filter { categoryId == null || it.categoryId == categoryId }
-                Result.success(ChannelsResponse(channels = demoList, total = demoList.size, page = 1))
+                Result.success(
+                    ChannelsResponse(
+                        channels = demoList,
+                        page = 1,
+                        limit = demoList.size,
+                        total = demoList.size,
+                        hasMore = false
+                    )
+                )
             } else {
                 Result.failure(e)
             }
@@ -179,10 +204,12 @@ class CatalogRepository(private val context: Context) {
             val demoUrl = resolveDemoStream(type, id)
             return@withContext Result.success(
                 StreamResolveResponse(
+                    success = true,
+                    mediaId = id,
+                    mediaType = type,
+                    title = "Flux Démo",
                     streamUrl = demoUrl,
-                    expiresAtUtc = "2099-12-31T23:59:59Z",
-                    drmType = null,
-                    licenseUrl = null
+                    expiresInSecs = 86400L
                 )
             )
         }
@@ -198,10 +225,12 @@ class CatalogRepository(private val context: Context) {
             val fallbackUrl = resolveDemoStream(type, id)
             Result.success(
                 StreamResolveResponse(
+                    success = true,
+                    mediaId = id,
+                    mediaType = type,
+                    title = "Flux Démo (Secours)",
                     streamUrl = fallbackUrl,
-                    expiresAtUtc = "2099-12-31T23:59:59Z",
-                    drmType = null,
-                    licenseUrl = null
+                    expiresInSecs = 86400L
                 )
             )
         }
@@ -212,21 +241,21 @@ class CatalogRepository(private val context: Context) {
     private fun getDemoCategories(type: String): List<Category> {
         return when (type) {
             "live" -> listOf(
-                Category("cat_live_general", "Généralistes & Infos", "live"),
-                Category("cat_live_sports", "Sports & Directs", "live"),
-                Category("cat_live_cinema", "Cinéma & Séries", "live"),
-                Category("cat_live_docs", "Découverte & Science", "live")
+                Category(id = "cat_live_general", categoryType = "live", name = "Généralistes & Infos", nameAr = "قنوات عامة وإخبارية", iconUrl = null, sortOrder = 1),
+                Category(id = "cat_live_sports", categoryType = "live", name = "Sports & Directs", nameAr = "رياضة وبث مباشر", iconUrl = null, sortOrder = 2),
+                Category(id = "cat_live_cinema", categoryType = "live", name = "Cinéma & Séries", nameAr = "أفلام ومسلسلات", iconUrl = null, sortOrder = 3),
+                Category(id = "cat_live_docs", categoryType = "live", name = "Découverte & Science", nameAr = "وثائقيات وعلوم", iconUrl = null, sortOrder = 4)
             )
             "movies" -> listOf(
-                Category("cat_mov_action", "Action & SF", "movies"),
-                Category("cat_mov_animation", "Animation & Famille", "movies"),
-                Category("cat_mov_docs", "Documentaires", "movies")
+                Category(id = "cat_mov_action", categoryType = "movies", name = "Action & SF", nameAr = "حركة وخيال علمي", iconUrl = null, sortOrder = 1),
+                Category(id = "cat_mov_animation", categoryType = "movies", name = "Animation & Famille", nameAr = "رسوم متحركة وعائلة", iconUrl = null, sortOrder = 2),
+                Category(id = "cat_mov_docs", categoryType = "movies", name = "Documentaires", nameAr = "أفلام وثائقية", iconUrl = null, sortOrder = 3)
             )
             "series" -> listOf(
-                Category("cat_ser_dram", "Drame & Thriller", "series"),
-                Category("cat_ser_sf", "Science-Fiction", "series")
+                Category(id = "cat_ser_dram", categoryType = "series", name = "Drame & Thriller", nameAr = "دراما وإثارة", iconUrl = null, sortOrder = 1),
+                Category(id = "cat_ser_sf", categoryType = "series", name = "Science-Fiction", nameAr = "خيال علمي", iconUrl = null, sortOrder = 2)
             )
-            else -> listOf(Category("cat_all", "Tous les flux", type))
+            else -> listOf(Category(id = "cat_all", categoryType = type, name = "Tous les flux", nameAr = "جميع القنوات", iconUrl = null, sortOrder = 1))
         }
     }
 
@@ -234,48 +263,48 @@ class CatalogRepository(private val context: Context) {
         return listOf(
             Channel(
                 id = "demo_f24",
-                channelNumber = 1,
+                channelNum = 1,
                 name = "France 24 HD (Direct)",
                 categoryId = "cat_live_general",
                 streamUrl = "https://static.france24.com/live/F24_FR_HI_HLS/live_tv.m3u8",
                 logoUrl = "https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=200&h=200&fit=crop",
-                currentProgram = EpgProgram("epg_1", "demo_f24", "Le Journal International", "Actualités mondiales en direct", "14:00", "15:00", 65)
+                epgChannelId = "epg_demo_1"
             ),
             Channel(
                 id = "demo_bbb_live",
-                channelNumber = 2,
+                channelNum = 2,
                 name = "BeShare Cinema 4K",
                 categoryId = "cat_live_cinema",
                 streamUrl = "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
                 logoUrl = "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=200&h=200&fit=crop",
-                currentProgram = EpgProgram("epg_2", "demo_bbb_live", "Big Buck Bunny - Grand Format", "Animation 4K HDR en diffusion continue", "14:30", "15:30", 40)
+                epgChannelId = "epg_demo_2"
             ),
             Channel(
                 id = "demo_tos_live",
-                channelNumber = 3,
+                channelNum = 3,
                 name = "Sci-Fi Universe Live",
                 categoryId = "cat_live_cinema",
                 streamUrl = "https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8",
                 logoUrl = "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=200&h=200&fit=crop",
-                currentProgram = EpgProgram("epg_3", "demo_tos_live", "Tears of Steel (Sci-Fi HLS)", "Production futuriste et effets visuels avancés", "15:00", "16:00", 25)
+                epgChannelId = "epg_demo_3"
             ),
             Channel(
                 id = "demo_sintel_live",
-                channelNumber = 4,
+                channelNum = 4,
                 name = "Animation 24/7",
                 categoryId = "cat_live_general",
                 streamUrl = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
                 logoUrl = "https://images.unsplash.com/photo-1578632767115-351597cf2477?w=200&h=200&fit=crop",
-                currentProgram = EpgProgram("epg_4", "demo_sintel_live", "Sintel : La Quête Épique", "Long métrage d'animation et d'aventure", "15:15", "16:30", 15)
+                epgChannelId = "epg_demo_4"
             ),
             Channel(
                 id = "demo_cosmos",
-                channelNumber = 5,
+                channelNum = 5,
                 name = "Planète & Découverte",
                 categoryId = "cat_live_docs",
                 streamUrl = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
                 logoUrl = "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=200&h=200&fit=crop",
-                currentProgram = EpgProgram("epg_5", "demo_cosmos", "Exploration Spatiale", "Les mystères des étoiles et galaxies", "14:45", "15:45", 55)
+                epgChannelId = "epg_demo_5"
             )
         )
     }
@@ -285,46 +314,46 @@ class CatalogRepository(private val context: Context) {
             Movie(
                 id = "demo_mov_tos",
                 title = "Tears of Steel",
-                year = 2024,
-                durationMinutes = 82,
-                rating = "4K HDR",
+                releaseYear = 2024,
+                durationMins = 82,
+                rating = 4.8f,
                 categoryId = "cat_mov_action",
                 posterUrl = "https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=400&h=600&fit=crop",
                 streamUrl = "https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8",
-                plot = "Dans un futur dystopique à Amsterdam, un groupe de survivants tente de sauver l'humanité face à une armée de robots sentients."
+                synopsis = "Dans un futur dystopique à Amsterdam, un groupe de survivants tente de sauver l'humanité face à une armée de robots sentients."
             ),
             Movie(
                 id = "demo_mov_bbb",
                 title = "Big Buck Bunny",
-                year = 2023,
-                durationMinutes = 68,
-                rating = "Tout Public",
+                releaseYear = 2023,
+                durationMins = 68,
+                rating = 4.5f,
                 categoryId = "cat_mov_animation",
                 posterUrl = "https://images.unsplash.com/photo-1563089145-599997674d42?w=400&h=600&fit=crop",
                 streamUrl = "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
-                plot = "Un lièvre bienveillant décide de se venger de trois petits rongeurs turbulents qui terrorisent les animaux de la forêt."
+                synopsis = "Un lièvre bienveillant décide de se venger de trois petits rongeurs turbulents qui terrorisent les animaux de la forêt."
             ),
             Movie(
                 id = "demo_mov_sintel",
                 title = "Sintel - La Gardienne",
-                year = 2024,
-                durationMinutes = 95,
-                rating = "Aventure",
+                releaseYear = 2024,
+                durationMins = 95,
+                rating = 4.6f,
                 categoryId = "cat_mov_action",
                 posterUrl = "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=400&h=600&fit=crop",
                 streamUrl = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
-                plot = "Une jeune combattante solitaire traverse des terres hostiles à la recherche de son dragonneau capturé par des bêtes colossales."
+                synopsis = "Une jeune combattante solitaire traverse des terres hostiles à la recherche de son dragonneau capturé par des bêtes colossales."
             ),
             Movie(
                 id = "demo_mov_cosmos",
                 title = "Chroniques de l'Espace",
-                year = 2025,
-                durationMinutes = 110,
-                rating = "Documentaire",
+                releaseYear = 2025,
+                durationMins = 110,
+                rating = 4.9f,
                 categoryId = "cat_mov_docs",
                 posterUrl = "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=400&h=600&fit=crop",
                 streamUrl = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
-                plot = "Une plongée spectaculaire au cœur des télescopes orbitaux et des découvertes astrophysiques les plus récentes."
+                synopsis = "Une plongée spectaculaire au cœur des télescopes orbitaux et des découvertes astrophysiques les plus récentes."
             )
         )
     }
@@ -335,6 +364,8 @@ class CatalogRepository(private val context: Context) {
                 id = "demo_ser_odyssey",
                 title = "Solaris Odyssey",
                 seasonsCount = 2,
+                rating = 4.7f,
+                releaseYear = 2024,
                 categoryId = "cat_ser_sf",
                 posterUrl = "https://images.unsplash.com/photo-1506703719100-a0f3a48c0f86?w=400&h=600&fit=crop",
                 plot = "L'équipage d'une station spatiale autonome fait face à des anomalies temporelles et des présences inconnues."
@@ -343,6 +374,8 @@ class CatalogRepository(private val context: Context) {
                 id = "demo_ser_cyber",
                 title = "Neon Protocol",
                 seasonsCount = 1,
+                rating = 4.6f,
+                releaseYear = 2025,
                 categoryId = "cat_ser_dram",
                 posterUrl = "https://images.unsplash.com/photo-1515260268569-9271009adfdb?w=400&h=600&fit=crop",
                 plot = "Dans une mégapole hyper-connectée, un détective privé traque une cyber-menace capable de manipuler les flux vidéo en direct."
@@ -358,7 +391,7 @@ class CatalogRepository(private val context: Context) {
                 seasonNumber = 1,
                 episodeNumber = 1,
                 title = "Épisode 1 : L'Origine du Signal",
-                durationMinutes = 48,
+                durationMins = 48,
                 streamUrl = "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
                 plot = "L'équipage reçoit une transmission cryptée provenant d'un secteur non cartographié."
             ),
@@ -368,7 +401,7 @@ class CatalogRepository(private val context: Context) {
                 seasonNumber = 1,
                 episodeNumber = 2,
                 title = "Épisode 2 : L'Horizon Caché",
-                durationMinutes = 52,
+                durationMins = 52,
                 streamUrl = "https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8",
                 plot = "Une avarie moteur contraint le vaisseau à stationner près d'une nébuleuse instable."
             )
@@ -377,9 +410,36 @@ class CatalogRepository(private val context: Context) {
 
     private fun getDemoEpg(channelId: String): List<EpgProgram> {
         return listOf(
-            EpgProgram("epg_demo_1", channelId, "Édition Spéciale Direct", "Couverture complète de l'actualité", "14:00", "15:00", 75),
-            EpgProgram("epg_demo_2", channelId, "Le Grand Reportage", "Enquête exclusive sur le terrain", "15:00", "16:00", 0),
-            EpgProgram("epg_demo_3", channelId, "Soirée Cinéma Première", "Diffusion événement en qualité Master 4K", "16:00", "18:00", 0)
+            EpgProgram(
+                id = "epg_demo_1",
+                channelId = channelId,
+                epgChannelId = channelId,
+                title = "Édition Spéciale Direct",
+                description = "Couverture complète de l'actualité",
+                startTime = "14:00",
+                endTime = "15:00",
+                category = "Information"
+            ),
+            EpgProgram(
+                id = "epg_demo_2",
+                channelId = channelId,
+                epgChannelId = channelId,
+                title = "Le Grand Reportage",
+                description = "Enquête exclusive sur le terrain",
+                startTime = "15:00",
+                endTime = "16:00",
+                category = "Magazine"
+            ),
+            EpgProgram(
+                id = "epg_demo_3",
+                channelId = channelId,
+                epgChannelId = channelId,
+                title = "Soirée Cinéma Première",
+                description = "Diffusion événement en qualité Master 4K",
+                startTime = "16:00",
+                endTime = "18:00",
+                category = "Cinéma"
+            )
         )
     }
 
