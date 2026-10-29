@@ -1,0 +1,6 @@
+{
+  "name": "BeShare TV - Système de Gestion & Synchronisation",
+  "description": "Panneau d'administration et synchronisation backend Supabase pour BeShare TV avec application Android / Android TV.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
