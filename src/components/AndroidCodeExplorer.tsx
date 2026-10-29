@@ -22,6 +22,10 @@ export const AndroidCodeExplorer: React.FC<AndroidCodeExplorerProps> = ({ lang }
   const files = [
     { id: 'player', name: 'PlayerActivity.kt', title: 'AndroidX Media3 ExoPlayer', path: '/android/app/src/main/java/com/beshare/tv/ui/player/PlayerActivity.kt' },
     { id: 'home', name: 'HomeScreen.kt', title: 'Jetpack Compose & D-pad Focus', path: '/android/app/src/main/java/com/beshare/tv/ui/screens/HomeScreen.kt' },
+    { id: 'series_detail', name: 'SeriesDetailScreen.kt', title: 'Saisons & Épisodes Séries', path: '/android/app/src/main/java/com/beshare/tv/ui/screens/SeriesDetailScreen.kt' },
+    { id: 'epg', name: 'EpgScreen.kt', title: 'Guide TV Électronique & Direct', path: '/android/app/src/main/java/com/beshare/tv/ui/screens/EpgScreen.kt' },
+    { id: 'search', name: 'SearchScreen.kt', title: 'Recherche Globale Live/VOD', path: '/android/app/src/main/java/com/beshare/tv/ui/screens/SearchScreen.kt' },
+    { id: 'settings', name: 'SettingsScreen.kt', title: 'Paramètres & Buffer ExoPlayer', path: '/android/app/src/main/java/com/beshare/tv/ui/screens/SettingsScreen.kt' },
     { id: 'viewmodel', name: 'MainViewModel.kt', title: 'Architecture MVVM & Quotas', path: '/android/app/src/main/java/com/beshare/tv/ui/viewmodel/MainViewModel.kt' },
     { id: 'api_service', name: 'BeShareApiService.kt', title: 'Interface Retrofit Coroutines', path: '/android/app/src/main/java/com/beshare/tv/data/api/BeShareApiService.kt' },
     { id: 'models', name: 'Models.kt', title: 'Modèles de données (Live, VOD, EPG)', path: '/android/app/src/main/java/com/beshare/tv/data/model/Models.kt' },
@@ -144,6 +148,95 @@ fun ChannelCard(channel: Channel, onClick: () -> Unit) {
     ) {
         // Logo, nom de chaîne et EPG en cours
     }
+}`}</pre>
+          )}
+
+          {selectedFile === 'series_detail' && (
+            <pre>{`// SeriesDetailScreen.kt — Navigation saisons et épisodes
+@Composable
+fun SeriesDetailScreen(series: Series, viewModel: MainViewModel, onBack: () -> Unit) {
+    var selectedSeason by remember { mutableStateOf(1) }
+    
+    // Carrousel de sélection des saisons avec focus D-pad
+    LazyRow {
+        items(series.seasonsCount) { idx ->
+            SeasonChip(season = idx + 1, isSelected = (idx + 1 == selectedSeason))
+        }
+    }
+    
+    // Liste des épisodes avec durée et lecture ExoPlayer
+    LazyColumn {
+        items(episodes) { episode ->
+            EpisodeRow(episode, onPlay = {
+                viewModel.resolveStream("episode", episode.id, onResolved = { url ->
+                    context.startActivity(Intent(context, PlayerActivity::class.java).apply {
+                        putExtra(PlayerActivity.EXTRA_STREAM_URL, url)
+                    })
+                })
+            })
+        }
+    }
+}`}</pre>
+          )}
+
+          {selectedFile === 'epg' && (
+            <pre>{`// EpgScreen.kt — Guide TV 2 colonnes Android TV
+@Composable
+fun EpgScreen(viewModel: MainViewModel, onBack: () -> Unit) {
+    // Colonne 1 : Liste des chaînes TV
+    LazyColumn(modifier = Modifier.width(220.dp)) {
+        items(channels) { ch -> ChannelItem(ch, onSelect = { selectedChannel = ch }) }
+    }
+    
+    // Colonne 2 : Grille des programmes (Direct / Suivants)
+    LazyColumn(modifier = Modifier.weight(1f)) {
+        items(programs) { prog ->
+            EpgProgramCard(
+                program = prog,
+                isLive = prog.isLiveNow(),
+                onTuneIn = { playStream(selectedChannel.streamUrl) }
+            )
+        }
+    }
+}`}</pre>
+          )}
+
+          {selectedFile === 'search' && (
+            <pre>{`// SearchScreen.kt — Moteur de recherche unifié
+@Composable
+fun SearchScreen(viewModel: MainViewModel, onBack: () -> Unit, onSelectSeries: (Series) -> Unit) {
+    var query by remember { mutableStateOf("") }
+    
+    OutlinedTextField(
+        value = query,
+        onValueChange = { query = it },
+        placeholder = { Text("Rechercher chaîne, film, série...") }
+    )
+    
+    // Grille adaptative des résultats (Live, Films VOD, Séries)
+    LazyVerticalGrid(columns = GridCells.Adaptive(minSize = 140.dp)) {
+        items(filteredChannels) { ch -> ChannelCard(ch, onClick = { play(ch) }) }
+        items(filteredMovies) { m -> MovieCard(m, onClick = { play(m) }) }
+        items(filteredSeries) { s -> SeriesCard(s, onClick = { onSelectSeries(s) }) }
+    }
+}`}</pre>
+          )}
+
+          {selectedFile === 'settings' && (
+            <pre>{`// SettingsScreen.kt — Diagnostics et réglages de mémoire tampon
+@Composable
+fun SettingsScreen(viewModel: MainViewModel, onBack: () -> Unit) {
+    val deviceId = remember { ApiClient.getDeviceId(context) }
+    
+    // Affichage de l'empreinte matérielle et quota multi-écrans
+    SettingRow("Identifiant UUID (x-device-id)", deviceId)
+    SettingRow("Passerelle Backend", "Supabase Client-API Edge Gateway")
+    
+    // Réglages du buffer ExoPlayer
+    BufferModeSelector(
+        modes = listOf("Standard (15s)", "Faible Latence (5s)", "Réseau Instable (30s)"),
+        onSelect = { mode -> updateExoPlayerBuffer(mode) }
+    )
 }`}</pre>
           )}
 

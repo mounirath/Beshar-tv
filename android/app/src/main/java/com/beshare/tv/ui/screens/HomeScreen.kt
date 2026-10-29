@@ -7,7 +7,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -33,11 +32,19 @@ import coil.compose.AsyncImage
 import com.beshare.tv.data.model.Category
 import com.beshare.tv.data.model.Channel
 import com.beshare.tv.data.model.Movie
+import com.beshare.tv.data.model.Series
 import com.beshare.tv.ui.player.PlayerActivity
 import com.beshare.tv.ui.theme.*
 import com.beshare.tv.ui.viewmodel.CatalogUiState
 import com.beshare.tv.ui.viewmodel.MainViewModel
 
+/**
+ * Écran d'accueil principal orchestrant la navigation D-pad :
+ * - Catalogue Direct (Live TV), Films (VOD), Séries TV
+ * - Guide TV (EPG)
+ * - Recherche Globale
+ * - Paramètres & Diagnostics
+ */
 @Composable
 fun HomeScreen(viewModel: MainViewModel) {
     val context = LocalContext.current
@@ -47,7 +54,51 @@ fun HomeScreen(viewModel: MainViewModel) {
     val selectedCatId by viewModel.selectedCategoryId.collectAsState()
     val channels by viewModel.channels.collectAsState()
     val movies by viewModel.movies.collectAsState()
+    val series by viewModel.series.collectAsState()
 
+    // Navigation d'écran interne : "catalog", "search", "epg", "settings", "series_detail"
+    var currentScreen by remember { mutableStateOf("catalog") }
+    var selectedSeriesForDetail by remember { mutableStateOf<Series?>(null) }
+
+    when (currentScreen) {
+        "search" -> {
+            SearchScreen(
+                viewModel = viewModel,
+                onBack = { currentScreen = "catalog" },
+                onSelectSeries = {
+                    selectedSeriesForDetail = it
+                    currentScreen = "series_detail"
+                }
+            )
+            return
+        }
+        "epg" -> {
+            EpgScreen(
+                viewModel = viewModel,
+                onBack = { currentScreen = "catalog" }
+            )
+            return
+        }
+        "settings" -> {
+            SettingsScreen(
+                viewModel = viewModel,
+                onBack = { currentScreen = "catalog" }
+            )
+            return
+        }
+        "series_detail" -> {
+            selectedSeriesForDetail?.let { ser ->
+                SeriesDetailScreen(
+                    series = ser,
+                    viewModel = viewModel,
+                    onBack = { currentScreen = "catalog" }
+                )
+                return
+            }
+        }
+    }
+
+    // Écran Standard du Catalogue
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -75,7 +126,7 @@ fun HomeScreen(viewModel: MainViewModel) {
                 )
             }
 
-            // Boutons d'onglets (Live, VOD, Séries)
+            // Onglets Centraux (Live, VOD, Séries)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 NavTabItem(
                     title = "Live TV",
@@ -94,6 +145,25 @@ fun HomeScreen(viewModel: MainViewModel) {
                     icon = Icons.Default.VideoLibrary,
                     isSelected = activeTab == "series",
                     onClick = { viewModel.switchTab("series") }
+                )
+            }
+
+            // Boutons d'Action (Recherche, Guide EPG, Paramètres)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ActionIconButton(
+                    icon = Icons.Default.Search,
+                    contentDescription = "Recherche",
+                    onClick = { currentScreen = "search" }
+                )
+                ActionIconButton(
+                    icon = Icons.Default.Schedule,
+                    contentDescription = "Guide TV EPG",
+                    onClick = { currentScreen = "epg" }
+                )
+                ActionIconButton(
+                    icon = Icons.Default.Settings,
+                    contentDescription = "Paramètres",
+                    onClick = { currentScreen = "settings" }
                 )
             }
         }
@@ -145,79 +215,108 @@ fun HomeScreen(viewModel: MainViewModel) {
             }
             is CatalogUiState.Success -> {
                 // Carrousel horizontal des catégories
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    items(categories) { cat ->
-                        CategoryChip(
-                            category = cat,
-                            isSelected = cat.id == selectedCatId,
-                            onClick = { viewModel.selectCategory(cat.id) }
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Grille de contenus : Chaînes TV en Direct
-                if (activeTab == "live") {
-                    LazyVerticalGrid(
-                        columns = GridCells.Adaptive(minSize = 160.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                        modifier = Modifier.fillMaxSize()
+                if (categories.isNotEmpty()) {
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        items(channels) { channel ->
-                            ChannelCard(
-                                channel = channel,
-                                onClick = {
-                                    viewModel.resolveStream(
-                                        type = "channel",
-                                        id = channel.id,
-                                        onResolved = { streamUrl ->
-                                            val intent = Intent(context, PlayerActivity::class.java).apply {
-                                                putExtra(PlayerActivity.EXTRA_STREAM_URL, streamUrl)
-                                                putExtra(PlayerActivity.EXTRA_MEDIA_TITLE, channel.name)
-                                            }
-                                            context.startActivity(intent)
-                                        },
-                                        onError = { error ->
-                                            Toast.makeText(context, error, Toast.LENGTH_LONG).show()
-                                        }
-                                    )
-                                }
+                        items(categories) { category ->
+                            CategoryChip(
+                                category = category,
+                                isSelected = category.id == selectedCatId,
+                                onClick = { viewModel.selectCategory(category.id) }
                             )
                         }
                     }
-                } else if (activeTab == "movies") {
-                    // Grille de VOD Films
-                    LazyVerticalGrid(
-                        columns = GridCells.Adaptive(minSize = 130.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                        modifier = Modifier.fillMaxSize()
-                    ) {
-                        items(movies) { movie ->
-                            MovieCard(
-                                movie = movie,
-                                onClick = {
-                                    viewModel.resolveStream(
-                                        type = "movie",
-                                        id = movie.id,
-                                        onResolved = { streamUrl ->
-                                            val intent = Intent(context, PlayerActivity::class.java).apply {
-                                                putExtra(PlayerActivity.EXTRA_STREAM_URL, streamUrl)
-                                                putExtra(PlayerActivity.EXTRA_MEDIA_TITLE, movie.title)
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+
+                // Grille de contenu adaptée au mode (Chaînes / Films / Séries)
+                when (activeTab) {
+                    "live" -> {
+                        LazyVerticalGrid(
+                            columns = GridCells.Adaptive(minSize = 130.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            items(channels) { channel ->
+                                ChannelCard(
+                                    channel = channel,
+                                    onClick = {
+                                        viewModel.resolveStream(
+                                            type = "channel",
+                                            id = channel.id,
+                                            onResolved = { streamUrl ->
+                                                val intent = Intent(context, PlayerActivity::class.java).apply {
+                                                    putExtra(PlayerActivity.EXTRA_STREAM_URL, streamUrl)
+                                                    putExtra(PlayerActivity.EXTRA_MEDIA_TITLE, channel.name)
+                                                }
+                                                context.startActivity(intent)
+                                            },
+                                            onError = { error ->
+                                                val intent = Intent(context, PlayerActivity::class.java).apply {
+                                                    putExtra(PlayerActivity.EXTRA_STREAM_URL, channel.streamUrl)
+                                                    putExtra(PlayerActivity.EXTRA_MEDIA_TITLE, channel.name)
+                                                }
+                                                context.startActivity(intent)
                                             }
-                                            context.startActivity(intent)
-                                        },
-                                        onError = { error ->
-                                            Toast.makeText(context, error, Toast.LENGTH_LONG).show()
-                                        }
-                                    )
-                                }
-                            )
+                                        )
+                                    }
+                                )
+                            }
+                        }
+                    }
+                    "movies" -> {
+                        LazyVerticalGrid(
+                            columns = GridCells.Adaptive(minSize = 140.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            items(movies) { movie ->
+                                MovieCard(
+                                    movie = movie,
+                                    onClick = {
+                                        viewModel.resolveStream(
+                                            type = "movie",
+                                            id = movie.id,
+                                            onResolved = { streamUrl ->
+                                                val intent = Intent(context, PlayerActivity::class.java).apply {
+                                                    putExtra(PlayerActivity.EXTRA_STREAM_URL, streamUrl)
+                                                    putExtra(PlayerActivity.EXTRA_MEDIA_TITLE, movie.title)
+                                                }
+                                                context.startActivity(intent)
+                                            },
+                                            onError = { error ->
+                                                val intent = Intent(context, PlayerActivity::class.java).apply {
+                                                    putExtra(PlayerActivity.EXTRA_STREAM_URL, movie.streamUrl)
+                                                    putExtra(PlayerActivity.EXTRA_MEDIA_TITLE, movie.title)
+                                                }
+                                                context.startActivity(intent)
+                                            }
+                                        )
+                                    }
+                                )
+                            }
+                        }
+                    }
+                    "series" -> {
+                        LazyVerticalGrid(
+                            columns = GridCells.Adaptive(minSize = 140.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            items(series) { serie ->
+                                SeriesCard(
+                                    series = serie,
+                                    onClick = {
+                                        selectedSeriesForDetail = serie
+                                        currentScreen = "series_detail"
+                                    }
+                                )
+                            }
                         }
                     }
                 }
@@ -244,7 +343,7 @@ fun NavTabItem(
             .clickable(onClick = onClick)
             .border(
                 width = if (isFocused) 2.dp else 1.dp,
-                color = if (isFocused) Emerald400 else Color.Transparent,
+                color = if (isFocused) Emerald400 else Slate800,
                 shape = RoundedCornerShape(12.dp)
             )
     ) {
@@ -260,6 +359,27 @@ fun NavTabItem(
 }
 
 @Composable
+fun ActionIconButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    contentDescription: String,
+    onClick: () -> Unit
+) {
+    var isFocused by remember { mutableStateOf(false) }
+
+    IconButton(
+        onClick = onClick,
+        modifier = Modifier
+            .size(38.dp)
+            .background(if (isFocused) Indigo600 else Slate900, RoundedCornerShape(10.dp))
+            .border(1.dp, if (isFocused) Color.White else Slate800, RoundedCornerShape(10.dp))
+            .onFocusChanged { isFocused = it.isFocused }
+            .focusable()
+    ) {
+        Icon(icon, contentDescription = contentDescription, tint = Color.White, modifier = Modifier.size(18.dp))
+    }
+}
+
+@Composable
 fun CategoryChip(
     category: Category,
     isSelected: Boolean,
@@ -268,24 +388,24 @@ fun CategoryChip(
     var isFocused by remember { mutableStateOf(false) }
 
     Surface(
-        color = if (isSelected) Indigo600 else if (isFocused) Slate800 else Slate900,
-        shape = RoundedCornerShape(8.dp),
+        color = if (isSelected) Indigo600.copy(alpha = 0.3f) else if (isFocused) Slate800 else Slate900,
+        shape = RoundedCornerShape(10.dp),
         modifier = Modifier
             .onFocusChanged { isFocused = it.isFocused }
             .focusable()
             .clickable(onClick = onClick)
             .border(
-                width = if (isFocused) 2.dp else 1.dp,
-                color = if (isFocused) Emerald400 else Slate800,
-                shape = RoundedCornerShape(8.dp)
+                width = 1.dp,
+                color = if (isSelected) Indigo400 else if (isFocused) Color.White else Slate800,
+                shape = RoundedCornerShape(10.dp)
             )
     ) {
         Text(
             text = category.name,
-            color = Color.White,
+            color = if (isSelected) Indigo400 else Color.White,
             fontSize = 12.sp,
-            fontWeight = FontWeight.Medium,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp)
         )
     }
 }
@@ -302,19 +422,22 @@ fun ChannelCard(
         shape = RoundedCornerShape(12.dp),
         modifier = Modifier
             .fillMaxWidth()
+            .height(115.dp)
             .onFocusChanged { isFocused = it.isFocused }
             .focusable()
             .clickable(onClick = onClick)
             .border(
-                width = if (isFocused) 3.dp else 1.dp,
-                color = if (isFocused) Emerald400 else Slate800,
+                width = if (isFocused) 2.dp else 1.dp,
+                color = if (isFocused) Indigo400 else Slate800,
                 shape = RoundedCornerShape(12.dp)
             )
     ) {
         Column(
-            modifier = Modifier.padding(12.dp),
+            modifier = Modifier
+                .padding(10.dp)
+                .fillMaxSize(),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            verticalArrangement = Arrangement.SpaceBetween
         ) {
             if (!channel.logoUrl.isNullOrEmpty()) {
                 AsyncImage(
@@ -322,24 +445,23 @@ fun ChannelCard(
                     contentDescription = channel.name,
                     contentScale = ContentScale.Fit,
                     modifier = Modifier
-                        .size(54.dp)
+                        .size(48.dp)
                         .clip(RoundedCornerShape(8.dp))
+                        .background(Slate950)
                 )
             } else {
-                Box(
-                    modifier = Modifier
-                        .size(54.dp)
-                        .background(Slate800, RoundedCornerShape(8.dp)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(Icons.Default.LiveTv, contentDescription = null, tint = Indigo400)
-                }
+                Icon(
+                    imageVector = Icons.Default.Tv,
+                    contentDescription = null,
+                    tint = Indigo400,
+                    modifier = Modifier.size(40.dp)
+                )
             }
 
             Text(
                 text = channel.name,
                 color = Color.White,
-                fontSize = 13.sp,
+                fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -366,7 +488,7 @@ fun MovieCard(
             .clickable(onClick = onClick)
             .border(
                 width = if (isFocused) 3.dp else 1.dp,
-                color = if (isFocused) Emerald400 else Color.Transparent,
+                color = if (isFocused) Pink500 else Color.Transparent,
                 shape = RoundedCornerShape(12.dp)
             )
     ) {
@@ -378,12 +500,11 @@ fun MovieCard(
                 modifier = Modifier.fillMaxSize()
             )
 
-            // Titre en bas
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .align(Alignment.BottomCenter)
-                    .background(Color.Black.copy(alpha = 0.75f))
+                    .background(Color.Black.copy(alpha = 0.8f))
                     .padding(6.dp)
             ) {
                 Text(
@@ -393,6 +514,63 @@ fun MovieCard(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+            }
+        }
+    }
+}
+
+@Composable
+fun SeriesCard(
+    series: Series,
+    onClick: () -> Unit
+) {
+    var isFocused by remember { mutableStateOf(false) }
+
+    Card(
+        colors = CardDefaults.cardColors(containerColor = Slate900),
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .aspectRatio(0.68f)
+            .onFocusChanged { isFocused = it.isFocused }
+            .focusable()
+            .clickable(onClick = onClick)
+            .border(
+                width = if (isFocused) 3.dp else 1.dp,
+                color = if (isFocused) Purple500 else Color.Transparent,
+                shape = RoundedCornerShape(12.dp)
+            )
+    ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            AsyncImage(
+                model = series.posterUrl,
+                contentDescription = series.title,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.BottomCenter)
+                    .background(Color.Black.copy(alpha = 0.8f))
+                    .padding(6.dp)
+            ) {
+                Column {
+                    Text(
+                        text = series.title,
+                        color = Color.White,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = "${series.seasonsCount} Saisons",
+                        color = Purple400,
+                        fontSize = 10.sp
+                    )
+                }
             }
         }
     }
