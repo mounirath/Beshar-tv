@@ -42,7 +42,8 @@ import {
   FolderInput,
   X,
   Filter,
-  RotateCcw
+  RotateCcw,
+  Activity
 } from 'lucide-react';
 
 import { Source, Category, Channel, SyncLog, SourceType } from './types';
@@ -51,6 +52,7 @@ import { SourceModal } from './components/SourceModal';
 import { StreamPlayerModal } from './components/StreamPlayerModal';
 import { CategoryManager } from './components/CategoryManager';
 import { SyncLogsView } from './components/SyncLogsView';
+import { SystemDiagnostic } from './components/SystemDiagnostic';
 import { VercelDeployGuide } from './components/VercelDeployGuide';
 import { AndroidApiPlayground } from './components/AndroidApiPlayground';
 import { AndroidCodeExplorer } from './components/AndroidCodeExplorer';
@@ -63,7 +65,7 @@ import { SQL_TABLES } from './data/schemaData';
 
 export default function App() {
   const [lang, setLang] = useState<'fr' | 'ar'>('fr');
-  const [activeSection, setActiveSection] = useState<'sources' | 'channels' | 'vod' | 'epg' | 'categories' | 'logs' | 'android_api' | 'android_code' | 'e2e_tests' | 'ssrf_lab' | 'database' | 'vercel'>('sources');
+  const [activeSection, setActiveSection] = useState<'sources' | 'channels' | 'vod' | 'epg' | 'categories' | 'logs' | 'system_diagnostic' | 'android_api' | 'android_code' | 'e2e_tests' | 'ssrf_lab' | 'database' | 'vercel'>('sources');
 
   // Core Data State
   const [sources, setSources] = useState<Source[]>([]);
@@ -526,6 +528,23 @@ export default function App() {
                 activeSection === 'logs' ? 'bg-white/20 text-white' : 'bg-slate-800 text-slate-400'
               }`}>
                 {syncLogs.length}
+              </span>
+            </button>
+
+            <button
+              onClick={() => setActiveSection('system_diagnostic')}
+              className={`w-full flex items-center justify-between p-3 rounded-xl text-xs font-semibold transition-all shrink-0 ${
+                activeSection === 'system_diagnostic'
+                  ? 'bg-gradient-to-r from-indigo-600 via-indigo-500 to-purple-600 text-white shadow-lg shadow-indigo-600/25 ring-1 ring-white/20'
+                  : 'bg-slate-900 text-slate-300 hover:bg-slate-850 hover:text-white border border-slate-800/80'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Activity className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span className="font-bold">{lang === 'fr' ? 'Diagnostic Système' : 'تشخيص النظام'}</span>
+              </div>
+              <span className="px-2 py-0.5 rounded-full text-[10px] bg-emerald-500/25 text-emerald-300 font-mono font-bold border border-emerald-500/30">
+                LIVE
               </span>
             </button>
 
@@ -1469,6 +1488,11 @@ export default function App() {
               onRefresh={loadAllData}
               lang={lang}
             />
+          )}
+
+          {/* SECTION: DIAGNOSTIC SYSTÈME */}
+          {activeSection === 'system_diagnostic' && (
+            <SystemDiagnostic lang={lang} />
           )}
 
           {/* SECTION 5: SSRF LAB */}
