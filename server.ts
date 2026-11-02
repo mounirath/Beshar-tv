@@ -1737,6 +1737,131 @@ CREATE POLICY "Accès total sync_logs pour admin" ON public.sync_logs FOR ALL US
     }
   });
 
+  // 11. Backend System Diagnostic Overview
+  app.get('/api/diagnostic/overview', async (_req, res) => {
+    let catalogueFileSize = 0;
+    try {
+      const stats = await fs.stat(DATA_FILE);
+      catalogueFileSize = stats.size;
+    } catch {
+      catalogueFileSize = 0;
+    }
+
+    // Inspect sources accessibility without leaking credentials
+    const sourceDiagnostics = await Promise.all(
+      catalogueCache.sources.map(async (s) => {
+        const cleanServer = (s.server_url || '').replace(/\/+$/, '');
+        let reachable = false;
+        let latencyMs = 0;
+        let httpStatus = 0;
+        let errorMessage: string | null = null;
+
+        if (cleanServer.startsWith('http://') || cleanServer.startsWith('https://')) {
+          const t0 = Date.now();
+          try {
+            const ctrl = new AbortController();
+            const tm = setTimeout(() => ctrl.abort(), 6000);
+            const pingRes = await fetch(cleanServer, {
+              method: 'HEAD',
+              headers: { 'User-Agent': 'VLC/3.0.18 LibVLC/3.0.18' },
+              signal: ctrl.signal,
+            }).catch(async () => {
+              return await fetch(cleanServer, {
+                method: 'GET',
+                headers: { 'User-Agent': 'VLC/3.0.18 LibVLC/3.0.18' },
+                signal: ctrl.signal,
+              });
+            });
+            clearTimeout(tm);
+            latencyMs = Date.now() - t0;
+            httpStatus = pingRes.status;
+            reachable = pingRes.status < 500;
+          } catch (err: any) {
+            latencyMs = Date.now() - t0;
+            errorMessage =
+              err.name === 'AbortError'
+                ? 'Délai d’attente dépassé (timeout 6s)'
+                : (err.message || 'Hôte inaccessible');
+          }
+        }
+
+        let hostName = 'N/A';
+        try {
+          if (cleanServer.startsWith('http')) {
+            hostName = new URL(cleanServer).host;
+          }
+        } catch {
+          hostName = 'URL non parseable';
+        }
+
+        return {
+          id: s.id,
+          name: s.name,
+          type: s.type,
+          server_host: hostName,
+          server_protocol: cleanServer.startsWith('https') ? 'https' : 'http',
+          username: s.username ? `${s.username.slice(0, 3)}••••` : 'N/A',
+          has_password: Boolean(s.password),
+          is_active: Boolean(s.is_active),
+          last_sync_at: s.last_sync_at,
+          last_sync_status: s.last_sync_status,
+          last_error: s.last_error,
+          reachable,
+          latencyMs,
+          httpStatus,
+          errorMessage,
+        };
+      })
+    );
+
+    // Environment variables status
+    const envSupabaseUrl = process.env.VITE_SUPABASE_URL || '';
+    const envAnonKey = process.env.VITE_SUPABASE_ANON_KEY || '';
+    const envServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+
+    const isPlaceholderUrl =
+      !envSupabaseUrl ||
+      envSupabaseUrl.includes('your_project_id') ||
+      envSupabaseUrl.includes('your-project-id');
+
+    let parsedHost: string | null = null;
+    try {
+      if (envSupabaseUrl) parsedHost = new URL(envSupabaseUrl).host;
+    } catch {
+      parsedHost = 'URL invalide';
+    }
+
+    res.json({
+      timestamp: new Date().toISOString(),
+      uptimeSeconds: Math.floor(process.uptime()),
+      nodeVersion: process.version,
+      platform: process.platform,
+      memoryUsageMb: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
+      catalogueFile: {
+        path: 'data/catalogue.json',
+        sizeBytes: catalogueFileSize,
+        sizeMb: (catalogueFileSize / (1024 * 1024)).toFixed(2),
+        exists: catalogueFileSize > 0,
+      },
+      counts: {
+        sources: catalogueCache.sources.length,
+        categories: catalogueCache.categories.length,
+        channels: catalogueCache.channels.length,
+        movies: catalogueCache.movies.length,
+        series: catalogueCache.series.length,
+        syncLogs: catalogueCache.syncLogs.length,
+      },
+      environment: {
+        hasSupabaseUrl: Boolean(envSupabaseUrl),
+        isPlaceholderUrl,
+        supabaseHost: parsedHost,
+        hasAnonKey: Boolean(envAnonKey),
+        hasServiceRoleKey: Boolean(envServiceKey),
+      },
+      sources: sourceDiagnostics,
+    });
+  });
+
   // Frontend mounting
   if (!isProduction) {
     const vite = await createViteServer({

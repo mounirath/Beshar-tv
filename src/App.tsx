@@ -52,20 +52,20 @@ import { SourceModal } from './components/SourceModal';
 import { StreamPlayerModal } from './components/StreamPlayerModal';
 import { CategoryManager } from './components/CategoryManager';
 import { SyncLogsView } from './components/SyncLogsView';
-import { SystemDiagnostic } from './components/SystemDiagnostic';
 import { VercelDeployGuide } from './components/VercelDeployGuide';
 import { AndroidApiPlayground } from './components/AndroidApiPlayground';
 import { AndroidCodeExplorer } from './components/AndroidCodeExplorer';
 import { EndToEndTestRunner } from './components/EndToEndTestRunner';
 import { VodManager } from './components/VodManager';
 import { EpgGuideView } from './components/EpgGuideView';
+import { SystemDiagnostic } from './components/SystemDiagnostic';
 import { getSavedSupabaseConfig, saveSupabaseConfig, getSupabaseClient } from './lib/supabase';
 import { testUrlSSRF } from './lib/edgeTester';
 import { SQL_TABLES } from './data/schemaData';
 
 export default function App() {
   const [lang, setLang] = useState<'fr' | 'ar'>('fr');
-  const [activeSection, setActiveSection] = useState<'sources' | 'channels' | 'vod' | 'epg' | 'categories' | 'logs' | 'system_diagnostic' | 'android_api' | 'android_code' | 'e2e_tests' | 'ssrf_lab' | 'database' | 'vercel'>('sources');
+  const [activeSection, setActiveSection] = useState<'sources' | 'channels' | 'vod' | 'epg' | 'categories' | 'logs' | 'diagnostic' | 'android_api' | 'android_code' | 'e2e_tests' | 'ssrf_lab' | 'database' | 'vercel'>('sources');
 
   // Core Data State
   const [sources, setSources] = useState<Source[]>([]);
@@ -379,25 +379,10 @@ export default function App() {
           </div>
 
           {/* Quick Actions & Language Switcher */}
-          <div className="flex items-center gap-2 sm:gap-3">
-            <button
-              onClick={() => setActiveSection('system_diagnostic')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all border ${
-                activeSection === 'system_diagnostic'
-                  ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white border-indigo-400 shadow-md shadow-indigo-600/30 ring-1 ring-white/20'
-                  : 'bg-slate-800 text-emerald-400 border-slate-700 hover:bg-slate-750 hover:text-emerald-300'
-              }`}
-              title="Ouvrir le Diagnostic Système"
-            >
-              <Activity className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-              <span className="hidden sm:inline">{lang === 'fr' ? 'Diagnostic Système' : 'تشخيص النظام'}</span>
-              <span className="sm:hidden">{lang === 'fr' ? 'Diagnostic' : 'فحص'}</span>
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
-            </button>
-
+          <div className="flex items-center gap-3">
             <button
               onClick={handleAddSource}
-              className="hidden md:flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md shadow-indigo-600/20 transition-all"
+              className="hidden sm:flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md shadow-indigo-600/20 transition-all"
             >
               <Plus className="w-4 h-4" />
               {lang === 'fr' ? 'Ajouter une Source' : 'إضافة مصدر'}
@@ -547,18 +532,20 @@ export default function App() {
             </button>
 
             <button
-              onClick={() => setActiveSection('system_diagnostic')}
+              onClick={() => setActiveSection('diagnostic')}
               className={`w-full flex items-center justify-between p-3 rounded-xl text-xs font-semibold transition-all shrink-0 ${
-                activeSection === 'system_diagnostic'
-                  ? 'bg-gradient-to-r from-indigo-600 via-indigo-500 to-purple-600 text-white shadow-lg shadow-indigo-600/25 ring-1 ring-white/20'
+                activeSection === 'diagnostic'
+                  ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md shadow-indigo-600/30'
                   : 'bg-slate-900 text-slate-300 hover:bg-slate-850 hover:text-white border border-slate-800/80'
               }`}
             >
               <div className="flex items-center gap-2.5">
-                <Activity className="w-4 h-4 text-emerald-400 shrink-0" />
+                <Activity className="w-4 h-4 text-emerald-400 animate-pulse" />
                 <span className="font-bold">{lang === 'fr' ? 'Diagnostic Système' : 'تشخيص النظام'}</span>
               </div>
-              <span className="px-2 py-0.5 rounded-full text-[10px] bg-emerald-500/25 text-emerald-300 font-mono font-bold border border-emerald-500/30">
+              <span className={`px-1.5 py-0.5 rounded text-[10px] font-mono ${
+                activeSection === 'diagnostic' ? 'bg-white/25 text-white' : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+              }`}>
                 LIVE
               </span>
             </button>
@@ -1505,11 +1492,6 @@ export default function App() {
             />
           )}
 
-          {/* SECTION: DIAGNOSTIC SYSTÈME */}
-          {activeSection === 'system_diagnostic' && (
-            <SystemDiagnostic lang={lang} />
-          )}
-
           {/* SECTION 5: SSRF LAB */}
           {activeSection === 'ssrf_lab' && (
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
@@ -1595,6 +1577,11 @@ export default function App() {
           {/* SECTION: END-TO-END TESTS RUNNER (ÉTAPE 6) */}
           {activeSection === 'e2e_tests' && (
             <EndToEndTestRunner lang={lang} />
+          )}
+
+          {/* SECTION: SYSTEM DIAGNOSTIC (NOUVELLE RUBRIQUE) */}
+          {activeSection === 'diagnostic' && (
+            <SystemDiagnostic lang={lang} />
           )}
 
           {/* SECTION 7: VERCEL DEPLOYMENT */}
