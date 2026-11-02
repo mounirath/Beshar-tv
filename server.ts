@@ -1275,16 +1275,35 @@ CREATE POLICY "Accès total sync_logs pour admin" ON public.sync_logs FOR ALL US
 
       const mStart = Date.now();
       try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 4000);
+
         const mRes = await fetch(m3uUrl, {
-          headers: { 'User-Agent': 'VLC/3.0.18 LibVLC/3.0.18' },
-          signal: AbortSignal.timeout(4000),
+          headers: {
+            'User-Agent': 'VLC/3.0.18 LibVLC/3.0.18',
+            'Range': 'bytes=0-2048',
+          },
+          signal: controller.signal,
         });
+        clearTimeout(timeout);
         m3uDownload.latencyMs = Date.now() - mStart;
         m3uDownload.httpStatus = mRes.status;
 
         if (mRes.ok || mRes.status === 206) {
-          const textChunk = await mRes.text().catch(() => '');
-          const first100 = textChunk.slice(0, 500);
+          let first100 = '';
+          if (mRes.body) {
+            // @ts-ignore
+            const reader = mRes.body.getReader();
+            const { value } = await reader.read();
+            if (value) {
+              first100 = new TextDecoder().decode(value.slice(0, 500));
+            }
+            reader.cancel().catch(() => {});
+          } else {
+            const txt = await mRes.text().catch(() => '');
+            first100 = txt.slice(0, 500);
+          }
+
           const lines = first100.split(/\r?\n/).filter(Boolean);
           m3uDownload.firstLine = lines[0] || '';
           const hasM3uHeader = first100.includes('#EXTM3U');
@@ -1345,11 +1364,24 @@ CREATE POLICY "Accès total sync_logs pour admin" ON public.sync_logs FOR ALL US
 
     const sStart = Date.now();
     try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 4000);
       const sRes = await fetch(sampleUrl, {
         method: 'GET',
-        headers: { 'User-Agent': 'VLC/3.0.18 LibVLC/3.0.18', Accept: '*/*' },
-        signal: AbortSignal.timeout(4000),
+        headers: {
+          'User-Agent': 'VLC/3.0.18 LibVLC/3.0.18',
+          'Accept': '*/*',
+          'Range': 'bytes=0-1024',
+        },
+        signal: controller.signal,
       });
+      clearTimeout(timeout);
+      if (sRes.body) {
+        // @ts-ignore
+        const reader = sRes.body.getReader();
+        await reader.read().catch(() => {});
+        reader.cancel().catch(() => {});
+      }
       streamingPlayback.latencyMs = Date.now() - sStart;
       streamingPlayback.directHttpStatus = sRes.status;
       const corsOrigin = sRes.headers.get('access-control-allow-origin');
@@ -1492,9 +1524,17 @@ CREATE POLICY "Accès total sync_logs pour admin" ON public.sync_logs FOR ALL US
         });
       }
 
-      // 2. Envoi des catégories par lots de 50
+      // 2. Récupération de l'UUID de la source enregistrée
+      const sourcesRes = await fetch(`${supabaseUrl}/rest/v1/sources?select=id&limit=1`, {
+        headers: { apikey: supabaseKey, Authorization: `Bearer ${supabaseKey}` },
+      });
+      const sourcesData = await sourcesRes.json().catch(() => []);
+      const sourceUuid = sourcesData[0]?.id;
+
+      // 3. Envoi des catégories
       let catsInserted = 0;
-      const catsBatch = catalogueCache.categories.slice(0, 150).map((c) => ({
+      const catsBatch = catalogueCache.categories.map((c) => ({
+        source_id: sourceUuid || undefined,
         category_type: c.category_type || 'live',
         category_ext_id: c.category_ext_id || String(c.id),
         name: c.name,
@@ -1515,9 +1555,46 @@ CREATE POLICY "Accès total sync_logs pour admin" ON public.sync_logs FOR ALL US
       });
       if (catRes.ok) catsInserted = catsBatch.length;
 
+      // 4. Envoi des chaînes TV par lots de 250
+      let channelsInserted = 0;
+      if (sourceUuid && catalogueCache.channels.length > 0) {
+        const BATCH_SIZE = 250;
+        for (let i = 0; i < catalogueCache.channels.length; i += BATCH_SIZE) {
+          const slice = catalogueCache.channels.slice(i, i + BATCH_SIZE);
+          const chPayload = slice.map((ch) => ({
+            source_id: sourceUuid,
+            channel_ext_id: String(ch.id).replace(/^ch-/, ''),
+            channel_num: ch.channel_num || 1,
+            name: ch.name,
+            stream_url: ch.stream_url,
+            logo_url: ch.logo_url || null,
+            epg_channel_id: ch.epg_id || null,
+            stream_type: 'live',
+            is_active: ch.is_active ?? true,
+            sort_order: ch.sort_order || 1,
+          }));
+
+          const chRes = await fetch(`${supabaseUrl}/rest/v1/channels`, {
+            method: 'POST',
+            headers: {
+              apikey: supabaseKey,
+              Authorization: `Bearer ${supabaseKey}`,
+              'Content-Type': 'application/json',
+              Prefer: 'resolution=ignore-duplicates',
+            },
+            body: JSON.stringify(chPayload),
+          });
+          if (chRes.ok) channelsInserted += chPayload.length;
+        }
+      }
+
       return res.json({
         success: true,
-        message: `Catalogue transmis à Supabase avec succès (${catsInserted} catégories synchronisées).`,
+        message: `Catalogue synchronisé avec succès dans Supabase : 1 source, ${catsInserted} catégories et ${channelsInserted} chaînes enregistrées !`,
+        stats: {
+          categories: catsInserted,
+          channels: channelsInserted,
+        },
       });
     } catch (err: any) {
       return res.status(500).json({ success: false, message: `Échec d'injection : ${err.message}` });

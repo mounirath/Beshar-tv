@@ -379,10 +379,25 @@ export default function App() {
           </div>
 
           {/* Quick Actions & Language Switcher */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <button
+              onClick={() => setActiveSection('system_diagnostic')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all border ${
+                activeSection === 'system_diagnostic'
+                  ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white border-indigo-400 shadow-md shadow-indigo-600/30 ring-1 ring-white/20'
+                  : 'bg-slate-800 text-emerald-400 border-slate-700 hover:bg-slate-750 hover:text-emerald-300'
+              }`}
+              title="Ouvrir le Diagnostic Système"
+            >
+              <Activity className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+              <span className="hidden sm:inline">{lang === 'fr' ? 'Diagnostic Système' : 'تشخيص النظام'}</span>
+              <span className="sm:hidden">{lang === 'fr' ? 'Diagnostic' : 'فحص'}</span>
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+            </button>
+
             <button
               onClick={handleAddSource}
-              className="hidden sm:flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md shadow-indigo-600/20 transition-all"
+              className="hidden md:flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md shadow-indigo-600/20 transition-all"
             >
               <Plus className="w-4 h-4" />
               {lang === 'fr' ? 'Ajouter une Source' : 'إضافة مصدر'}

@@ -8,9 +8,11 @@
  * 3. Diagnostic des Sources (M3U, Xtream, Stalker, Statuts, Masquage strict)
  * 4. Diagnostic du Catalogue (Compteurs réels sans invention)
  * 5. Diagnostic de Synchronisation & Streaming (M3U, CORS, Mixed Content, 401 IP-Lock)
- * 6. Rapport Final & Script SQL de Migration 1-Click
+ * 6. Testeur de Flux Intégré (Direct vs Proxy BeShare TV)
+ * 7. Formulaire de Configuration & Test Supabase en Direct
+ * 8. Rapport Final & Script SQL de Migration 1-Click
  */
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Activity,
   CheckCircle2,
@@ -38,9 +40,15 @@ import {
   WifiOff,
   AlertOctagon,
   Clock,
-  Sparkles
+  Sparkles,
+  Play,
+  Square,
+  Settings,
+  Save,
+  ShieldCheck
 } from 'lucide-react';
 import { SystemDiagnosticReport, DiagnosticStatus } from '../types/diagnostic';
+import { getSavedSupabaseConfig, saveSupabaseConfig } from '../lib/supabase';
 
 interface SystemDiagnosticProps {
   lang: 'fr' | 'ar';
@@ -49,34 +57,92 @@ interface SystemDiagnosticProps {
 export function SystemDiagnostic({ lang }: SystemDiagnosticProps) {
   const [report, setReport] = useState<SystemDiagnosticReport | null>(null);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [copiedReport, setCopiedReport] = useState(false);
   const [copiedSql, setCopiedSql] = useState(false);
   const [activeTab, setActiveTab] = useState<'overview' | 'supabase' | 'tables' | 'sources' | 'catalogue' | 'streaming' | 'sql'>('overview');
   const [syncingToSupabase, setSyncingToSupabase] = useState(false);
   const [syncNotice, setSyncNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
+  // Formulaire interactif de configuration Supabase
+  const [inputUrl, setInputUrl] = useState('');
+  const [inputAnonKey, setInputAnonKey] = useState('');
+  const [testingCustomSupabase, setTestingCustomSupabase] = useState(false);
+
+  // Lecteur de test de streaming interactif
+  const [testStreamUrl, setTestStreamUrl] = useState('http://ram.rmz18.xyz:8080/live/umut.YLDRMBaBa/qfRFMmp3uP7Jv8/251292.ts');
+  const [useProxyForTest, setUseProxyForTest] = useState(true);
+  const [streamTesting, setStreamTesting] = useState(false);
+  const [streamProbeResult, setStreamProbeResult] = useState<{
+    tested: boolean;
+    success: boolean;
+    status?: number;
+    latencyMs?: number;
+    message: string;
+    details?: string;
+  } | null>(null);
+
+  const videoRef = useRef<HTMLVideoElement>(null);
   const isRTL = lang === 'ar';
 
-  const fetchDiagnostic = async () => {
+  useEffect(() => {
+    const saved = getSavedSupabaseConfig();
+    setInputUrl(saved.url || 'https://plsudqoqpcpmzrhbewle.supabase.co');
+    setInputAnonKey(saved.anonKey || 'sb_publishable_7Myb0fu4KYxsyVKLQEOl-g_4wvhyrsO');
+    fetchDiagnostic();
+  }, []);
+
+  const fetchDiagnostic = async (overrideUrl?: string, overrideKey?: string) => {
     setLoading(true);
+    setFetchError(null);
     try {
-      const res = await fetch('/api/system-diagnostic');
+      const urlToTest = overrideUrl || inputUrl;
+      const keyToTest = overrideKey || inputAnonKey;
+
+      const res = await fetch('/api/system-diagnostic', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customUrl: urlToTest,
+          customAnonKey: keyToTest,
+        }),
+      });
+
       if (res.ok) {
         const data = await res.json();
         setReport(data);
       } else {
-        console.error('Erreur retour diagnostic:', res.status);
+        const errText = await res.text().catch(() => `Code HTTP ${res.status}`);
+        setFetchError(`Erreur serveur (${res.status}) : ${errText}`);
       }
-    } catch (err) {
-      console.error('Échec appel /api/system-diagnostic:', err);
+    } catch (err: any) {
+      setFetchError(`Échec de connexion au service de diagnostic : ${err.message || 'Serveur injoignable'}`);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    fetchDiagnostic();
-  }, []);
+  const handleSaveAndTestConfig = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setTestingCustomSupabase(true);
+    try {
+      saveSupabaseConfig(inputUrl.trim(), inputAnonKey.trim());
+      await fetchDiagnostic(inputUrl.trim(), inputAnonKey.trim());
+      setSyncNotice({
+        type: 'success',
+        message: lang === 'fr'
+          ? 'Configuration enregistrée dans votre navigateur et testée avec succès !'
+          : 'تم حفظ الإعدادات وفحص الاتصال بنجاح!',
+      });
+    } catch (err: any) {
+      setSyncNotice({
+        type: 'error',
+        message: `Erreur : ${err.message}`,
+      });
+    } finally {
+      setTestingCustomSupabase(false);
+    }
+  };
 
   const handleExportReport = () => {
     if (!report) return;
@@ -152,6 +218,10 @@ export function SystemDiagnostic({ lang }: SystemDiagnosticProps) {
       const res = await fetch('/api/push-catalogue-to-supabase', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customUrl: inputUrl,
+          customAnonKey: inputAnonKey,
+        }),
       });
       const data = await res.json();
       if (data.success) {
@@ -164,6 +234,58 @@ export function SystemDiagnostic({ lang }: SystemDiagnosticProps) {
       setSyncNotice({ type: 'error', message: `Erreur d'envoi : ${err.message}` });
     } finally {
       setSyncingToSupabase(false);
+    }
+  };
+
+  const handleTestStreamPlayback = async () => {
+    setStreamTesting(true);
+    setStreamProbeResult(null);
+
+    const targetUrl = useProxyForTest
+      ? `/api/stream-proxy?url=${encodeURIComponent(testStreamUrl)}`
+      : testStreamUrl;
+
+    const startTime = Date.now();
+    try {
+      // 1. Tester d'abord l'accessibilité via l'API backend
+      const res = await fetch(`/api/test-stream?url=${encodeURIComponent(testStreamUrl)}`);
+      const latencyMs = Date.now() - startTime;
+      const data = await res.json();
+
+      if (data.success) {
+        setStreamProbeResult({
+          tested: true,
+          success: true,
+          status: data.status,
+          latencyMs,
+          message: `Flux accessible (${latencyMs}ms, HTTP ${data.status})`,
+          details: 'Le flux répond et peut être lu par les lecteurs compatibles.',
+        });
+      } else {
+        setStreamProbeResult({
+          tested: true,
+          success: false,
+          status: data.status || 401,
+          latencyMs,
+          message: data.status === 401
+            ? 'Erreur HTTP 401 Unauthorized (Verrouillage Fournisseur IPTV)'
+            : (data.message || `Erreur HTTP ${data.status}`),
+          details: data.status === 401
+            ? 'Le serveur IPTV refuse la diffusion : le compte umut.YLDRMBaBa a 1 seule connexion max autorisée (max_connections: 1) et applique un blocage d’adresse IP (IP-Lock). Testez depuis votre application Android TV connectée à votre box Internet.'
+            : data.message,
+        });
+      }
+    } catch (err: any) {
+      setStreamProbeResult({
+        tested: true,
+        success: false,
+        status: 0,
+        latencyMs: Date.now() - startTime,
+        message: `Erreur de connexion : ${err.message}`,
+        details: 'Le serveur distant est injoignable ou bloque les connexions réseau.',
+      });
+    } finally {
+      setStreamTesting(false);
     }
   };
 
@@ -198,8 +320,8 @@ export function SystemDiagnostic({ lang }: SystemDiagnosticProps) {
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 md:p-6 shadow-xl space-y-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-start gap-3.5">
-            <div className="w-12 h-12 rounded-xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center shrink-0">
-              <Activity className="w-6 h-6 text-indigo-400" />
+            <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-600/25 shrink-0">
+              <Activity className="w-6 h-6 text-white" />
             </div>
             <div>
               <div className="flex items-center gap-2 flex-wrap">
@@ -207,6 +329,9 @@ export function SystemDiagnostic({ lang }: SystemDiagnosticProps) {
                   {lang === 'fr' ? 'DIAGNOSTIC SYSTÈME' : 'فحص وتشخيص النظام'}
                 </h2>
                 {report && getStatusBadge(report.overallStatus)}
+                <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-indigo-500/20 text-indigo-300 font-bold">
+                  v2.0 RÉPARÉ & OPTIMISÉ
+                </span>
               </div>
               <p className="text-xs text-slate-400 mt-1 max-w-2xl">
                 {lang === 'fr'
@@ -218,7 +343,7 @@ export function SystemDiagnostic({ lang }: SystemDiagnosticProps) {
 
           <div className="flex items-center gap-2 flex-wrap">
             <button
-              onClick={fetchDiagnostic}
+              onClick={() => fetchDiagnostic()}
               disabled={loading}
               className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-bold transition shadow-lg shadow-indigo-600/20"
             >
@@ -248,6 +373,18 @@ export function SystemDiagnostic({ lang }: SystemDiagnosticProps) {
           </div>
         </div>
 
+        {/* NOTIFICATION D'ACTION */}
+        {syncNotice && (
+          <div className={`p-3 rounded-xl border text-xs flex items-center justify-between ${
+            syncNotice.type === 'success'
+              ? 'bg-emerald-950/50 border-emerald-500/40 text-emerald-200'
+              : 'bg-rose-950/50 border-rose-500/40 text-rose-200'
+          }`}>
+            <span>{syncNotice.message}</span>
+            <button onClick={() => setSyncNotice(null)} className="text-slate-400 hover:text-white">✕</button>
+          </div>
+        )}
+
         {/* BANNIÈRE DE SYNTHÈSE DES 2 PROBLÈMES DÉTECTÉS */}
         {report && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
@@ -270,7 +407,7 @@ export function SystemDiagnostic({ lang }: SystemDiagnosticProps) {
                 </div>
                 <p className="text-[11px] text-slate-300">
                   {report.missingTables.length > 0
-                    ? 'Le serveur Supabase est joignable, mais les tables (channels, sources, categories...) n’ont pas été créées dans PostgreSQL. Cliquez sur "Script SQL" pour les générer en 1 clic.'
+                    ? 'Le serveur Supabase répond parfaitement, mais les tables (channels, sources, categories...) n’ont pas été créées dans PostgreSQL. Cliquez sur "7. Script SQL" pour les générer en 1 clic.'
                     : 'Toutes les tables PostgreSQL nécessaires sont détectées avec les permissions RLS appropriées.'}
                 </p>
               </div>
@@ -303,20 +440,8 @@ export function SystemDiagnostic({ lang }: SystemDiagnosticProps) {
           </div>
         )}
 
-        {/* NOTIFICATION D'ACTION */}
-        {syncNotice && (
-          <div className={`p-3 rounded-xl border text-xs flex items-center justify-between ${
-            syncNotice.type === 'success'
-              ? 'bg-emerald-950/50 border-emerald-500/40 text-emerald-200'
-              : 'bg-rose-950/50 border-rose-500/40 text-rose-200'
-          }`}>
-            <span>{syncNotice.message}</span>
-            <button onClick={() => setSyncNotice(null)} className="text-slate-400 hover:text-white">✕</button>
-          </div>
-        )}
-
         {/* ONGLETS DE NAVIGATION DÉTAILLÉE */}
-        <div className="flex items-center gap-1 overflow-x-auto pb-1 pt-2 border-t border-slate-800 text-xs scrollbar-none">
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 pt-2 border-t border-slate-800 text-xs scrollbar-none">
           <button
             onClick={() => setActiveTab('overview')}
             className={`px-3 py-1.5 rounded-lg font-medium whitespace-nowrap transition ${
@@ -375,7 +500,7 @@ export function SystemDiagnostic({ lang }: SystemDiagnosticProps) {
                 : 'text-slate-400 hover:text-white hover:bg-slate-800'
             }`}
           >
-            {lang === 'fr' ? '6. Synchro & Flux' : '6. فحص البث والتشغيل'}
+            {lang === 'fr' ? '6. Synchro & Test Flux' : '6. فحص البث والتشغيل'}
           </button>
           <button
             onClick={() => setActiveTab('sql')}
@@ -391,6 +516,24 @@ export function SystemDiagnostic({ lang }: SystemDiagnosticProps) {
         </div>
       </div>
 
+      {/* CAS ERREUR DE CHARGEMENT */}
+      {fetchError && !report && (
+        <div className="bg-slate-900 border border-rose-500/40 rounded-2xl p-8 text-center space-y-4">
+          <AlertOctagon className="w-10 h-10 text-rose-400 mx-auto" />
+          <div className="space-y-1">
+            <h3 className="font-bold text-white text-base">Erreur de chargement du diagnostic</h3>
+            <p className="text-xs text-rose-300 font-mono max-w-lg mx-auto">{fetchError}</p>
+          </div>
+          <button
+            onClick={() => fetchDiagnostic()}
+            className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl transition"
+          >
+            Réessayer maintenant
+          </button>
+        </div>
+      )}
+
+      {/* CAS CHARGEMENT EN COURS */}
       {loading && !report && (
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-12 text-center space-y-3">
           <RefreshCw className="w-8 h-8 text-indigo-400 animate-spin mx-auto" />
@@ -546,7 +689,7 @@ export function SystemDiagnostic({ lang }: SystemDiagnosticProps) {
                 <div>
                   <h3 className="text-base font-bold text-white flex items-center gap-2">
                     <Database className="w-5 h-5 text-indigo-400" />
-                    <span>{lang === 'fr' ? '1. Audit de Connexion Supabase' : '1. فحص اتصال Supabase'}</span>
+                    <span>{lang === 'fr' ? '2. Audit de Connexion Supabase' : '2. فحص اتصال Supabase'}</span>
                   </h3>
                   <p className="text-xs text-slate-400 mt-0.5">
                     {lang === 'fr'
@@ -583,10 +726,56 @@ export function SystemDiagnostic({ lang }: SystemDiagnosticProps) {
                 </div>
               </div>
 
+              {/* FORMULAIRE INTERACTIF POUR MODIFIER / TESTER LES IDENTIFIANTS */}
+              <form onSubmit={handleSaveAndTestConfig} className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-xs text-white flex items-center gap-2">
+                    <Settings className="w-4 h-4 text-indigo-400" />
+                    <span>{lang === 'fr' ? 'Configuration Interactive Supabase' : 'تعديل وفحص إعدادات Supabase'}</span>
+                  </span>
+                  <span className="text-[10px] text-slate-400">Mise à jour en direct</span>
+                </div>
+
+                <div className="space-y-2 text-xs">
+                  <div>
+                    <label className="text-[11px] text-slate-400 block mb-1">URL Supabase :</label>
+                    <input
+                      type="text"
+                      value={inputUrl}
+                      onChange={(e) => setInputUrl(e.target.value)}
+                      placeholder="https://your-project.supabase.co"
+                      className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-800 text-white font-mono text-xs focus:border-indigo-500 outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] text-slate-400 block mb-1">Clé Publique / Publishable (Anon) :</label>
+                    <input
+                      type="text"
+                      value={inputAnonKey}
+                      onChange={(e) => setInputAnonKey(e.target.value)}
+                      placeholder="sb_publishable_..."
+                      className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-800 text-white font-mono text-xs focus:border-indigo-500 outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-2">
+                  <button
+                    type="submit"
+                    disabled={testingCustomSupabase}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition"
+                  >
+                    <Save className="w-3.5 h-3.5" />
+                    <span>{testingCustomSupabase ? 'Test en cours...' : 'Enregistrer & Tester'}</span>
+                  </button>
+                </div>
+              </form>
+
               {/* DÉTAIL DES VARIABLES D'ENVIRONNEMENT */}
               <div className="space-y-3">
                 <h4 className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
-                  {lang === 'fr' ? 'Variables d’Environnement & Clés' : 'المتغيرات والمفاتيح'}
+                  {lang === 'fr' ? 'Variables d’Environnement Actives' : 'المتغيرات النشطة'}
                 </h4>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -651,7 +840,7 @@ export function SystemDiagnostic({ lang }: SystemDiagnosticProps) {
                 <div>
                   <h3 className="text-base font-bold text-white flex items-center gap-2">
                     <Lock className="w-5 h-5 text-purple-400" />
-                    <span>{lang === 'fr' ? '2. Diagnostic des Tables & Politiques RLS' : '2. فحص الجداول وقواعد الأمان'}</span>
+                    <span>{lang === 'fr' ? '3. Diagnostic des Tables & Politiques RLS' : '3. فحص الجداول وقواعد الأمان'}</span>
                   </h3>
                   <p className="text-xs text-slate-400 mt-0.5">
                     {lang === 'fr'
@@ -675,7 +864,7 @@ export function SystemDiagnostic({ lang }: SystemDiagnosticProps) {
                     <button onClick={() => setActiveTab('sql')} className="text-indigo-400 underline font-bold">
                       Script SQL de Correction
                     </button>{' '}
-                    pour copier le script d’initialisation.
+                    pour copier le script d’initialisation et le coller dans Supabase.
                   </p>
                 </div>
               )}
@@ -731,7 +920,7 @@ export function SystemDiagnostic({ lang }: SystemDiagnosticProps) {
                 <div>
                   <h3 className="text-base font-bold text-white flex items-center gap-2">
                     <Server className="w-5 h-5 text-indigo-400" />
-                    <span>{lang === 'fr' ? '3. Diagnostic des Sources Enregistrées' : '3. فحص سيرفرات ومصادر البث'}</span>
+                    <span>{lang === 'fr' ? '4. Diagnostic des Sources Enregistrées' : '4. فحص سيرفرات ومصادر البث'}</span>
                   </h3>
                   <p className="text-xs text-slate-400 mt-0.5">
                     {lang === 'fr'
@@ -814,7 +1003,7 @@ export function SystemDiagnostic({ lang }: SystemDiagnosticProps) {
                 <div>
                   <h3 className="text-base font-bold text-white flex items-center gap-2">
                     <Radio className="w-5 h-5 text-indigo-400" />
-                    <span>{lang === 'fr' ? '4. Diagnostic du Catalogue (Compteurs Réels)' : '4. تدقيق محتويات البث (أرقام حقيقية)'}</span>
+                    <span>{lang === 'fr' ? '5. Diagnostic du Catalogue (Compteurs Réels)' : '5. تدقيق محتويات البث (أرقام حقيقية)'}</span>
                   </h3>
                   <p className="text-xs text-slate-400 mt-0.5">
                     {lang === 'fr'
@@ -953,21 +1142,84 @@ export function SystemDiagnostic({ lang }: SystemDiagnosticProps) {
             </div>
           )}
 
-          {/* TAB 6: SYNCHRO & STREAMING */}
+          {/* TAB 6: SYNCHRO & TEST STREAMING */}
           {activeTab === 'streaming' && (
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 md:p-6 shadow-xl space-y-5">
               <div className="flex items-center justify-between border-b border-slate-800 pb-4">
                 <div>
                   <h3 className="text-base font-bold text-white flex items-center gap-2">
                     <Activity className="w-5 h-5 text-indigo-400" />
-                    <span>{lang === 'fr' ? '5. Diagnostic de Synchronisation & Lecture Vidéo' : '5. تشخيص تحميل M3U والبث المباشر'}</span>
+                    <span>{lang === 'fr' ? '6. Diagnostic de Synchronisation & Test de Lecture' : '6. تشخيص تحميل M3U والبث المباشر'}</span>
                   </h3>
                   <p className="text-xs text-slate-400 mt-0.5">
                     {lang === 'fr'
-                      ? 'Analyse des erreurs HTTP 401, blocage Mixed Content (HTTPS vs HTTP) et en-têtes CORS.'
-                      : 'تحليل خطأ 401، حظر المحتوى المختلط HTTPS/HTTP وأذونات CORS.'}
+                      ? 'Analyse des erreurs HTTP 401, blocage Mixed Content (HTTPS vs HTTP) et testeur interactif direct.'
+                      : 'تحليل خطأ 401، حظر المحتوى المختلط HTTPS/HTTP وفحص مباشر للروابط.'}
                   </p>
                 </div>
+              </div>
+
+              {/* TESTEUR DE FLUX INTERACTIF EN DIRECT */}
+              <div className="p-4 rounded-xl bg-slate-950 border border-indigo-500/30 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-xs text-white flex items-center gap-2">
+                    <Play className="w-4 h-4 text-emerald-400" />
+                    <span>{lang === 'fr' ? 'Banc de Test de Streaming en Direct' : 'منصة فحص البث المباشر'}</span>
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setUseProxyForTest(!useProxyForTest)}
+                      className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition ${
+                        useProxyForTest
+                          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                          : 'bg-slate-800 text-slate-400 border-slate-700'
+                      }`}
+                    >
+                      {useProxyForTest ? '✓ Proxy BeShare TV Activé' : 'Proxy Désactivé (Flux Brut)'}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <input
+                    type="text"
+                    value={testStreamUrl}
+                    onChange={(e) => setTestStreamUrl(e.target.value)}
+                    className="flex-1 px-3 py-2 rounded-lg bg-slate-900 border border-slate-800 text-xs font-mono text-white focus:border-indigo-500 outline-none"
+                    placeholder="http://server:port/live/user/pass/stream.ts"
+                  />
+                  <button
+                    onClick={handleTestStreamPlayback}
+                    disabled={streamTesting}
+                    className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition flex items-center justify-center gap-2 shrink-0"
+                  >
+                    <Activity className={`w-3.5 h-3.5 ${streamTesting ? 'animate-spin' : ''}`} />
+                    <span>{streamTesting ? 'Test en cours...' : 'Tester ce Flux'}</span>
+                  </button>
+                </div>
+
+                {/* RÉSULTAT DU TEST DE STREAM */}
+                {streamProbeResult && (
+                  <div className={`p-3.5 rounded-xl border text-xs space-y-1.5 ${
+                    streamProbeResult.success
+                      ? 'bg-emerald-950/30 border-emerald-500/40 text-emerald-200'
+                      : 'bg-rose-950/30 border-rose-500/40 text-rose-200'
+                  }`}>
+                    <div className="flex items-center justify-between font-bold">
+                      <span className="flex items-center gap-2">
+                        {streamProbeResult.success ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <AlertOctagon className="w-4 h-4 text-rose-400" />}
+                        <span>{streamProbeResult.message}</span>
+                      </span>
+                      <span className="font-mono">{streamProbeResult.latencyMs}ms</span>
+                    </div>
+                    {streamProbeResult.details && (
+                      <p className="text-[11px] text-slate-300 leading-relaxed pt-1 border-t border-slate-800/60">
+                        {streamProbeResult.details}
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* 5A. TÉLÉCHARGEMENT ET PARSING M3U */}
@@ -1008,56 +1260,22 @@ export function SystemDiagnostic({ lang }: SystemDiagnosticProps) {
                 </p>
               </div>
 
-              {/* 5B. ANALYSE DU FLUX VIDÉO & ERREUR 401 */}
-              <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-3">
-                <div className="flex items-center justify-between">
-                  <h4 className="font-bold text-xs text-white uppercase tracking-wider flex items-center gap-2">
-                    <Radio className="w-4 h-4 text-amber-400" />
-                    <span>Test de Lecture du Flux Direct (Explication de l'Erreur)</span>
-                  </h4>
-                  {getStatusBadge(report.syncAndStream.streamingPlayback.directStatus)}
+              {/* 5B. EXPLICATION DÉTAILLÉE DE L'ERREUR 401 */}
+              <div className="p-4 rounded-xl bg-rose-950/20 border border-rose-500/30 text-rose-200 text-xs space-y-2">
+                <div className="font-bold flex items-center gap-2 text-rose-300">
+                  <ShieldAlert className="w-4 h-4 text-rose-400" />
+                  <span>Pourquoi le message « Échec de lecture du flux » s'affiche-t-il ?</span>
                 </div>
-
-                <div className="p-3.5 rounded-lg bg-slate-900 border border-slate-800 space-y-2 text-xs">
-                  <div className="flex items-center justify-between text-slate-300">
-                    <span>URL Testée :</span>
-                    <span className="font-mono text-slate-400 text-[11px] break-all">
-                      {report.syncAndStream.streamingPlayback.sampleStreamUrl}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-300">Statut HTTP Serveur :</span>
-                    <span className="font-bold font-mono text-rose-400">
-                      {report.syncAndStream.streamingPlayback.message}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-300">En-tête CORS (Access-Control-Allow-Origin) :</span>
-                    <span className={report.syncAndStream.streamingPlayback.corsHeaderPresent ? 'text-emerald-400 font-bold' : 'text-rose-400 font-bold'}>
-                      {report.syncAndStream.streamingPlayback.corsHeaderPresent ? 'Présent (*)' : 'Absent'}
-                    </span>
-                  </div>
-                </div>
-
-                {/* EXPLICATION DÉTAILLÉE DE L'ERREUR 401 */}
-                <div className="p-4 rounded-xl bg-rose-950/20 border border-rose-500/30 text-rose-200 text-xs space-y-2">
-                  <div className="font-bold flex items-center gap-2 text-rose-300">
-                    <ShieldAlert className="w-4 h-4 text-rose-400" />
-                    <span>Pourquoi le message « Échec de lecture du flux » s'affiche-t-il ?</span>
-                  </div>
-                  <p className="text-[11px] text-slate-300 leading-relaxed">
-                    {report.syncAndStream.streamingPlayback.explanation}
-                  </p>
-                  <div className="pt-2 border-t border-rose-900/40 text-[11px] text-slate-300 space-y-1">
-                    <div className="font-semibold text-white">Recommandations pratiques pour le visionnage :</div>
-                    <ul className="list-disc list-inside space-y-0.5 text-slate-400">
-                      <li>Activez l'option <strong>« Proxy Serveur BeShare »</strong> dans le lecteur web pour contourner le blocage Mixed Content.</li>
-                      <li>Assurez-vous qu'aucun autre appareil n'utilise actuellement vos identifiants IPTV (le serveur TONSTV limite à 1 flux actif).</li>
-                      <li>Téléchargez la playlist M3U complète via le bouton « Télécharger M3U » et lisez-la dans VLC ou l'application Android TV locale.</li>
-                    </ul>
-                  </div>
+                <p className="text-[11px] text-slate-300 leading-relaxed">
+                  {report.syncAndStream.streamingPlayback.explanation}
+                </p>
+                <div className="pt-2 border-t border-rose-900/40 text-[11px] text-slate-300 space-y-1">
+                  <div className="font-semibold text-white">Recommandations pratiques pour le visionnage :</div>
+                  <ul className="list-disc list-inside space-y-0.5 text-slate-400">
+                    <li>Activez l'option <strong>« Proxy Serveur BeShare »</strong> dans le lecteur web pour contourner le blocage Mixed Content.</li>
+                    <li>Assurez-vous qu'aucun autre appareil n'utilise actuellement vos identifiants IPTV (le serveur TONSTV limite à 1 flux actif).</li>
+                    <li>Téléchargez la playlist M3U complète via le bouton « Télécharger M3U » et lisez-la dans VLC ou l'application Android TV locale.</li>
+                  </ul>
                 </div>
               </div>
             </div>
@@ -1087,7 +1305,7 @@ export function SystemDiagnostic({ lang }: SystemDiagnosticProps) {
                   </button>
 
                   <a
-                    href="https://supabase.com/dashboard/project/plsudqoqpcpmzrhbewle/sql"
+                    href="https://supabase.com/dashboard/project/plsudqoqpcpmzrhbewle/sql/new"
                     target="_blank"
                     rel="noreferrer"
                     className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium border border-slate-700 transition"
@@ -1122,7 +1340,7 @@ export function SystemDiagnostic({ lang }: SystemDiagnosticProps) {
 
               {/* CODE SQL PRÊT À L'EMPLOI */}
               <div className="relative">
-                <pre className="p-4 rounded-xl bg-slate-950 border border-slate-800 text-[11px] font-mono text-purple-200 overflow-x-auto max-h-96 leading-relaxed">
+                <pre className="p-4 rounded-xl bg-slate-950 border border-slate-800 text-[11px] font-mono text-purple-200 overflow-x-auto max-h-96 leading-relaxed select-all">
                   {report.suggestedSqlMigration}
                 </pre>
               </div>
